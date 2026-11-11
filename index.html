@@ -142,6 +142,7 @@ button{font:inherit;color:inherit;cursor:pointer}
       <span class="num" id="tNum"></span>
       <button class="bt" id="bSeg" title="Próxima página"></button>
       <button class="bt" id="bNova" title="Nova página"></button>
+      <button class="bt" id="bApagar" title="Apagar esta página"></button>
       <button class="sync" id="bSync" title="Sincronização"></button>
       <span class="versao" data-versao></span>
       <button class="bt" id="bTema" title="Modo claro / escuro"></button>
@@ -171,7 +172,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.0.1';
+const VERSAO = '1.0.2';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -209,7 +210,8 @@ const I = {
   texto: ic('<path d="M4 7V5h16v2M12 5v14M9 19h6"/>'),
   desfazer: ic('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>'),
   refazer: ic('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>'),
-  limpar: ic('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>'),
+  limpar: ic('<path d="M20 20H9"/><path d="M14.5 4.5l5 5L11 18H6l-2.5-2.5z"/><path d="M9 10l5 5"/>'),
+  lixo: ic('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>'),
   dedo: ic('<path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'),
   zmais: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/>'),
   zmenos: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/>'),
@@ -532,6 +534,7 @@ function pintarBarra(){
   $('#bAnt').disabled = i <= 0; $('#bSeg').disabled = i >= seq.length - 1;
   $('#bAnt').style.opacity = i <= 0 ? .35 : 1; $('#bSeg').style.opacity = i >= seq.length - 1 ? .35 : 1;
   $('#bPaginas').classList.toggle('oculto', false);
+  $('#bApagar').classList.toggle('oculto', !P);
 }
 function navegar(d){
   const seq = sequencia(), i = seq.indexOf(atualId), j = limitar(i + d, 0, seq.length - 1);
@@ -560,7 +563,7 @@ function montarFerramentas(){
     <span class="sep"></span>
     <button class="bt" data-acao="desfazer" title="Desfazer">${I.desfazer}</button>
     <button class="bt" data-acao="refazer" title="Refazer">${I.refazer}</button>
-    <button class="bt" data-acao="limpar" title="Apagar toda a tinta desta página">${I.limpar}</button>
+    <button class="bt" data-acao="limpar" title="Limpar toda a tinta desta página (a página continua)">${I.limpar}</button>
     <button class="bt" data-acao="dedo" title="Escrever também com o dedo">${I.dedo}</button>`;
   b2.addEventListener('click', e => {
     const f = e.target.closest('[data-ferr]'), c = e.target.closest('[data-cor]'), g = e.target.closest('[data-gr]'), a = e.target.closest('[data-acao]');
@@ -840,6 +843,25 @@ function criarAba(nome, cor, abrirDepois = true){
   tocar('paginas', div); tocar('paginas', pg);
   if (abrirDepois) abrir(div.id);
   return s;
+}
+
+/* apagar a página que está aberta: primeiro toque arma (botão vermelho), o segundo apaga */
+let armadoApagar = null;
+function apagarPaginaAtual(bt){
+  if (!P) return;
+  if (!armadoApagar){
+    armadoApagar = setTimeout(() => { armadoApagar = null; bt.style.background = ''; }, 3500);
+    bt.style.background = '#C0392B';
+    aviso('Toque de novo no lixo para apagar esta página', 3500);
+    return;
+  }
+  clearTimeout(armadoApagar); armadoApagar = null; bt.style.background = '';
+  gravarTintaAgora();
+  const sid = P.secao_id, i = paginasDe(sid).findIndex(p => p.id === P.id);
+  P.apagado = true; tocar('paginas', P);
+  const resto = paginasDe(sid);
+  abrir(resto.length ? resto[Math.min(i, resto.length - 1)].id : 'indice');
+  aviso(resto.length ? 'Página apagada' : 'Página apagada · a aba ficou vazia (apague a aba pelo índice, se quiser)', 3500);
 }
 
 /* ---------- painéis (folhas que sobem) ---------- */
@@ -1204,7 +1226,7 @@ function semente(){
 let precisaMedir = false;
 async function iniciar(){
   $('#bIndice').innerHTML = I.indice; $('#bPaginas').innerHTML = I.paginas; $('#bAnt').innerHTML = I.ant; $('#bSeg').innerHTML = I.seg;
-  $('#bNova').innerHTML = I.nova + '<span class="rot">Página</span>'; $('#bAjustes').innerHTML = I.ajustes;
+  $('#bNova').innerHTML = I.nova + '<span class="rot">Página</span>'; $('#bAjustes').innerHTML = I.ajustes; $('#bApagar').innerHTML = I.lixo;
   $$('[data-versao]').forEach(e => e.textContent = 'v' + VERSAO);
   aplicarTema(); montarFerramentas(); pintarFerramentas();
   $('#bIndice').onclick = () => abrir('indice');
@@ -1212,6 +1234,7 @@ async function iniciar(){
   $('#bAnt').onclick = () => navegar(-1);
   $('#bSeg').onclick = () => navegar(1);
   $('#bNova').onclick = painelNovaPagina;
+  $('#bApagar').onclick = e => apagarPaginaAtual(e.currentTarget);
   $('#bSync').onclick = () => sincronizar(true);
   $('#bTema').onclick = () => { gravarLS('pg.tema', lerLS('pg.tema', 'claro') === 'escuro' ? 'claro' : 'escuro'); aplicarTema(); };
   $('#bAjustes').onclick = painelAjustes;
