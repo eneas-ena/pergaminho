@@ -70,6 +70,14 @@ button{font:inherit;color:inherit;cursor:pointer}
 .mover svg{width:18px;height:18px}
 .modo-texto .tx{pointer-events:auto;-webkit-user-select:text;user-select:text;outline:1px dashed rgba(201,162,39,.85);outline-offset:3px;cursor:text}
 .modo-texto .mover{display:block}
+.figw{position:absolute;display:none;outline:2px dashed var(--ouro);outline-offset:0;pointer-events:auto;touch-action:none;cursor:move;background:rgba(201,162,39,.06)}
+.modo-figura .figw{display:block}
+.figApagar{position:absolute;right:-14px;top:-14px;width:28px;height:28px;border-radius:50%;background:#C0392B;color:#fff;font-size:20px;line-height:27px;text-align:center;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.figTam{position:absolute;right:-12px;bottom:-12px;width:26px;height:26px;border-radius:7px;background:var(--ouro);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:nwse-resize}
+#menuFormas{position:fixed;z-index:60;background:var(--painel);color:var(--tx);border:1px solid var(--borda);border-radius:14px;box-shadow:var(--sombra);padding:6px;display:flex;flex-direction:column;min-width:190px}
+#menuFormas button{display:flex;align-items:center;gap:12px;border:none;background:transparent;border-radius:9px;padding:9px 10px;font-size:15px;color:var(--tx);text-align:left}
+#menuFormas button svg{width:22px;height:22px}
+#menuFormas button.on{background:var(--ouro);color:var(--azul)}
 .abas{position:absolute;display:flex;flex-direction:column;gap:3px;z-index:2}
 .aba{width:30px;border:none;border-radius:0 9px 9px 0;padding:6px 0;writing-mode:vertical-rl;font-size:11px;font-weight:600;letter-spacing:.3px;
   color:rgba(0,0,0,.55);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;box-shadow:2px 1px 4px rgba(0,0,0,.08);transition:width .15s}
@@ -192,7 +200,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.2.0';
+const VERSAO = '1.3.0';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -217,6 +225,10 @@ function aviso(msg, ms = 2800, acao){
 /* ---------- ícones ---------- */
 const ic = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const I = {
+  formas: ic('<rect x="3" y="3" width="9" height="9" rx="1"/><circle cx="16.5" cy="16.5" r="4.5"/><path d="M14 3l7 0-3.5 6z"/>'),
+  imagem: ic('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
+  f_lin: ic('<path d="M5 19L19 5"/>'), f_seta: ic('<path d="M5 19L19 5M10 5h9v9"/>'), f_ret: ic('<rect x="4" y="6" width="16" height="12" rx="1"/>'),
+  f_eli: ic('<ellipse cx="12" cy="12" rx="9" ry="7"/>'), f_tri: ic('<path d="M12 4l9 16H3z"/>'),
   estante: ic('<path d="M4 19V5M8 19V5M12 19V7l4-2 4 14"/><path d="M3 19h18"/>'),
   indice: ic('<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>'),
   paginas: ic('<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="15" width="7" height="6" rx="1"/><rect x="14" y="15" width="7" height="6" rx="1"/>'),
@@ -474,6 +486,11 @@ function modelo(ctx, pag, W, H, v, secaoCor){
     ret(.465, .585, .48, .355, .002, '#EFEFEF'); rot('ANOTAÇÕES', .48, .6);
     rodape();
   }
+  if (pag && pag.fundo && pag.fundo.figs) pag.fundo.figs.forEach(f => {
+    const im = imagemPronta(f.img);
+    if (im) ctx.drawImage(im, X(f.x), Y(f.y), L(f.w), A(f.h));
+    else { ret(f.x, f.y, f.w, f.h, .003, '#F1EEE8'); carregarImagem(f.img).then(i => { if (i) aoChegarImagem(f.img); }); }
+  });
   ctx.restore();
   return out;
 }
@@ -561,9 +578,10 @@ function carregarImagem(id){
   IMG.set(id, { im: null, prom });
   return prom;
 }
+const usaImagem = (p, id) => !!(p && p.fundo && (p.fundo.img === id || (p.fundo.figs || []).some(f => f.img === id)));
 function aoChegarImagem(id){
-  if (P && P.fundo && P.fundo.img === id) desenharFundo();
-  $$('#veu canvas[data-pid]').forEach(cv => { const p = D.paginas.get(cv.dataset.pid); if (p && p.fundo && p.fundo.img === id) desenharMini(cv, p); });
+  if (usaImagem(P, id)) desenharFundo();
+  $$('#veu canvas[data-pid]').forEach(cv => { const p = D.paginas.get(cv.dataset.pid); if (usaImagem(p, id)) desenharMini(cv, p); });
 }
 /* onde a imagem fica dentro da página 3:4 (sem distorcer) */
 function encaixe(f){
@@ -580,7 +598,7 @@ async function subirImagens(){
   for (const id of imgPend()){
     const reg = await IDB.pegar('imagens', id);
     if (!reg){ marcarImgPend(id, false); continue; }
-    const { error } = await sb.storage.from(BUCKET).upload(`${uid}/${id}.jpg`, reg.blob, { upsert: true, contentType: 'image/jpeg' });
+    const { error } = await sb.storage.from(BUCKET).upload(`${uid}/${id}.jpg`, reg.blob, { upsert: true, contentType: reg.blob.type || 'image/jpeg' });
     if (error) throw Object.assign(new Error(error.message || 'falha ao enviar imagem'), { code: 'STORAGE', details: error.error || '' });
     reg.subiu = true; IDB.por('imagens', reg); marcarImgPend(id, false);
   }
@@ -592,8 +610,11 @@ async function baixarFaltantes(){
   baixando = true;
   try {
     for (const p of D.paginas.values()){
-      if (p.apagado || !p.fundo || !p.fundo.img || imagemPronta(p.fundo.img)) continue;
-      const im = await carregarImagem(p.fundo.img); if (im) aoChegarImagem(p.fundo.img);
+      if (p.apagado || !p.fundo) continue;
+      for (const id of [p.fundo.img, ...(p.fundo.figs || []).map(f => f.img)].filter(Boolean)){
+        if (imagemPronta(id)) continue;
+        const im = await carregarImagem(id); if (im) aoChegarImagem(id);
+      }
     }
   } finally { baixando = false; }
 }
@@ -832,6 +853,8 @@ function montarFerramentas(){
     <button class="bt" data-ferr="marca" title="Marca-texto">${I.marca}</button>
     <button class="bt" data-ferr="borracha" title="Borracha (apaga o traço inteiro)">${I.borracha}</button>
     <button class="bt" data-ferr="texto" title="Caixa de texto (teclado)">${I.texto}</button>
+    <button class="bt" data-ferr="forma" id="bForma" title="Formas geométricas">${I.formas}</button>
+    <button class="bt" data-ferr="figura" title="Inserir e ajustar imagens (JPG/PNG)">${I.imagem}</button>
     <span class="sep"></span>
     ${Object.entries(CORES).map(([k, v]) => `<button class="cor" data-cor="${k}" title="${k}" style="background:${v}"></button>`).join('')}
     <span class="sep"></span>
@@ -850,7 +873,16 @@ function montarFerramentas(){
     <button class="bt" data-acao="dedo" title="Escrever também com o dedo">${I.dedo}</button>`;
   b2.addEventListener('click', e => {
     const f = e.target.closest('[data-ferr]'), c = e.target.closest('[data-cor]'), g = e.target.closest('[data-gr]'), a = e.target.closest('[data-acao]');
-    if (f){ est.ferr = f.dataset.ferr; guardarEst(); pintarFerramentas(); return; }
+    if (f){
+      const antes = est.ferr; est.ferr = f.dataset.ferr; guardarEst(); pintarFerramentas();
+      if (est.ferr === 'forma') abrirMenuFormas(f);
+      if (est.ferr === 'figura'){
+        if (!P){ aviso('Abra uma página para inserir imagens.'); return; }
+        if (antes === 'figura' || !((P.fundo && P.fundo.figs) || []).length) inserirFigura();
+        else aviso('Arraste a imagem para mover · puxe o canto dourado para mudar o tamanho · toque de novo no botão para inserir outra', 5000);
+      }
+      return;
+    }
     if (c){ est.cor = c.dataset.cor; if (['borracha', 'mao'].includes(est.ferr)) est.ferr = 'caneta'; guardarEst(); pintarFerramentas(); aplicarCorNoTexto(); return; }
     if (g){ est.gr = g.dataset.gr; guardarEst(); pintarFerramentas(); aplicarCorNoTexto(); return; }
     if (!a) return;
@@ -871,6 +903,8 @@ function pintarFerramentas(){
   const d = $('#ferramentas [data-acao="dedo"]'); if (d) d.classList.toggle('on', est.dedo);
   const texto = est.ferr === 'texto';
   cx.palco.classList.toggle('modo-texto', texto);
+  cx.palco.classList.toggle('modo-figura', est.ferr === 'figura');
+  const bf = $('#bForma'); if (bf) bf.innerHTML = I['f_' + (est.forma || 'ret')] || I.formas;
   $$('.tx', cx.camada).forEach(t => t.contentEditable = texto ? 'true' : 'false');
   if (!texto && document.activeElement && document.activeElement.classList.contains('tx')) document.activeElement.blur();
 }
@@ -888,7 +922,7 @@ const achar = (lista, pt) => lista.find(a => pt.x >= a.x && pt.x <= a.x + a.w &&
 const alvoEm = e => { const pt = ponto(e); return achar(alvos.caixas, pt) || achar(alvos.alvos, pt); };
 
 function baixou(e){
-  if (e.target.closest('.abas, .txw')) return;
+  if (e.target.closest('.abas, .txw, .figw')) return;
   if (e.pointerType === 'pen') ultimaCaneta = performance.now();
   const dedoLivre = e.pointerType === 'touch' && !est.dedo;
   const palma = e.pointerType === 'touch' && performance.now() - ultimaCaneta < 1200;
@@ -910,11 +944,53 @@ function baixou(e){
   try { cx.palco.setPointerCapture(e.pointerId); } catch {}
   ativo = e.pointerId;
   if (est.ferr === 'borracha'){ antesBorracha = tracos.slice(); apagou = false; apagarEm(e); return; }
+  if (est.ferr === 'figura'){ ativo = null; return; }
+  if (est.ferr === 'forma'){
+    atual = { t: 'p', c: CORES[est.cor] || CORES.marinho, w: GROSSURA[est.gr], p: [], ini: pt, k: est.forma || 'ret' };
+    return;
+  }
   const marca = est.ferr === 'marca';
   atual = { t: marca ? 'h' : 'p', c: marca ? marcaCor() : (CORES[est.cor] || CORES.marinho), w: GROSSURA[est.gr] * (marca ? 6 : 1), p: [] };
   atual.p.push(pt.x, pt.y, pressao(e));
   desenharVivo();
 }
+/* formas viram traços comuns (a borracha, o desfazer e a sincronização funcionam igual) */
+function gerarForma(k, a, b){
+  // trabalha num espaço sem distorção: u = x, v = y × (altura/largura)
+  const A = [a.x, a.y * ASP], B = [b.x, b.y * ASP], pts = [];
+  const add = (u, v) => pts.push(+u.toFixed(4), +(v / ASP).toFixed(4), .5);
+  const seg = (p, q, n = 14) => { for (let i = pts.length ? 1 : 0; i <= n; i++) add(p[0] + (q[0] - p[0]) * i / n, p[1] + (q[1] - p[1]) * i / n); };
+  const poli = l => l.slice(1).forEach((q, i) => seg(l[i], q));
+  let du = B[0] - A[0], dv = B[1] - A[1];
+  if (k === 'lin') seg(A, B, 20);
+  else if (k === 'seta'){
+    const comp = Math.hypot(du, dv) || 1e-6, cab = Math.min(.035, comp * .35), ang = Math.atan2(dv, du);
+    const h1 = [B[0] - cab * Math.cos(ang - .45), B[1] - cab * Math.sin(ang - .45)], h2 = [B[0] - cab * Math.cos(ang + .45), B[1] - cab * Math.sin(ang + .45)];
+    poli([A, B, h1]); seg(h1, B, 6); seg(B, h2, 6);
+  }
+  else if (k === 'ret') poli([A, [B[0], A[1]], B, [A[0], B[1]], A]);
+  else if (k === 'tri') poli([[(A[0] + B[0]) / 2, A[1]], B, [A[0], B[1]], [(A[0] + B[0]) / 2, A[1]]]);
+  else if (k === 'eli'){
+    if (Math.abs(Math.abs(du) - Math.abs(dv)) < .12 * Math.max(Math.abs(du), Math.abs(dv))){ const m = Math.max(Math.abs(du), Math.abs(dv)); du = Math.sign(du || 1) * m; dv = Math.sign(dv || 1) * m; }   // quase redondo → círculo perfeito
+    const cu = A[0] + du / 2, cv = A[1] + dv / 2, ru = Math.abs(du / 2), rv = Math.abs(dv / 2);
+    for (let i = 0; i <= 80; i++){ const t = i / 80 * Math.PI * 2; add(cu + ru * Math.cos(t), cv + rv * Math.sin(t)); }
+  }
+  return pts;
+}
+function abrirMenuFormas(bt){
+  fecharMenuFormas();
+  const r = bt.getBoundingClientRect(), m = document.createElement('div');
+  m.id = 'menuFormas';
+  m.innerHTML = [['lin', 'Linha'], ['seta', 'Seta'], ['ret', 'Retângulo'], ['eli', 'Círculo / elipse'], ['tri', 'Triângulo']]
+    .map(([k, n]) => `<button data-k="${k}" class="${(est.forma || 'ret') === k ? 'on' : ''}">${I['f_' + k]}<span>${n}</span></button>`).join('');
+  Object.assign(m.style, { left: Math.max(8, r.left - 10) + 'px', top: (r.bottom + 6) + 'px' });
+  m.onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; est.forma = b.dataset.k; guardarEst(); pintarFerramentas(); fecharMenuFormas(); };
+  document.body.appendChild(m);
+  setTimeout(() => document.addEventListener('pointerdown', fecharForaFormas, true), 0);
+}
+function fecharForaFormas(e){ if (!e.target.closest('#menuFormas, #bForma')) fecharMenuFormas(); }
+function fecharMenuFormas(){ const m = $('#menuFormas'); if (m) m.remove(); document.removeEventListener('pointerdown', fecharForaFormas, true); }
+
 const marcaCor = () => est.cor === 'grafite' || est.cor === 'marinho' ? CORES.amarelo : CORES[est.cor];
 
 function moveu(e){
@@ -926,6 +1002,7 @@ function moveu(e){
   const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e], lista = evs.length ? evs : [e];
   if (est.ferr === 'borracha'){ lista.forEach(apagarEm); return; }
   if (!atual) return;
+  if (atual.ini){ const pt = ponto(e); atual.p = gerarForma(atual.k, atual.ini, pt); desenharVivo(); return; }
   lista.forEach(ev => { const pt = ponto(ev); atual.p.push(pt.x, pt.y, pressao(ev)); });
   desenharVivo();
 }
@@ -947,6 +1024,7 @@ function soltou(e){
     antesBorracha = null; return;
   }
   if (!atual) return;
+  if (atual.ini && atual.p.length < 6){ atual = null; desenharVivo(); return; }
   const s = { t: atual.t, c: atual.c, w: +atual.w.toFixed(5), p: atual.p.map((v, i) => i % 3 === 2 ? Math.round(v * 100) / 100 : Math.round(v * 10000) / 10000) };
   atual = null;
   fotografar(); tracos.push(s);
@@ -1029,11 +1107,73 @@ cx.palco.addEventListener('touchstart', e => {
 }, { passive: false });
 
 /* =====================================================================
+   IMAGENS SOLTAS NA PÁGINA (JPG/PNG)
+   ===================================================================== */
+async function inserirFigura(){
+  if (!P) return;
+  const arq = await new Promise(ok => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.className = 'oculto';
+    i.onchange = () => { ok(i.files[0] || null); i.remove(); }; document.body.appendChild(i); i.click();
+  });
+  if (!arq) return;
+  try {
+    const im = await blobParaImagem(arq); if (!im) throw new Error('não consegui abrir a imagem');
+    const k = Math.min(1, LARG_IMG / im.naturalWidth), cv = document.createElement('canvas');
+    cv.width = Math.round(im.naturalWidth * k); cv.height = Math.round(im.naturalHeight * k);
+    const png = /png|gif|webp/i.test(arq.type);                 // PNG mantém o fundo transparente
+    const ctx = cv.getContext('2d'); if (!png){ ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+    ctx.drawImage(im, 0, 0, cv.width, cv.height);
+    const blob = await new Promise(ok => cv.toBlob(ok, png ? 'image/png' : 'image/jpeg', .86));
+    const g = await guardarImagem(blob, cv.width, cv.height);
+    let w = .5, h = w * (cv.height / cv.width) / ASP;
+    if (h > .6){ h = .6; w = h * ASP * cv.width / cv.height; }
+    const cx0 = V.L + .5 / V.z, cy0 = V.T + .5 / V.z;
+    const f = { id: novoId(), img: g.img, ar: cv.height / cv.width, x: limitar(cx0 - w / 2, 0, 1 - w), y: limitar(cy0 - h / 2, 0, 1 - h), w, h };
+    P.fundo = { ...(P.fundo || {}), figs: [...((P.fundo && P.fundo.figs) || []), f] };
+    tocar('paginas', P);
+    est.ferr = 'figura'; guardarEst(); desenharTudo();
+    aviso('Imagem inserida · arraste para mover, puxe o canto dourado para o tamanho · depois toque no lápis', 5000);
+  } catch (e) { aviso('Não consegui inserir: ' + (e.message || e), 6000); }
+}
+function criarMolduraFig(f){
+  const d = document.createElement('div');
+  d.className = 'figw'; d.dataset.id = f.id;
+  Object.assign(d.style, { left: (f.x * 100) + '%', top: (f.y * 100) + '%', width: (f.w * 100) + '%', height: (f.h * 100) + '%' });
+  d.innerHTML = `<span class="figApagar" title="Apagar imagem">×</span><span class="figTam" title="Mudar o tamanho"></span>`;
+  return d;
+}
+cx.camada.addEventListener('pointerdown', e => {
+  const d = e.target.closest('.figw'); if (!d || !P) return;
+  e.preventDefault(); e.stopPropagation();
+  const figs = (P.fundo && P.fundo.figs) || [], f = figs.find(x => x.id === d.dataset.id); if (!f) return;
+  if (e.target.closest('.figApagar')){
+    const antes = figs.slice();
+    P.fundo = { ...P.fundo, figs: figs.filter(x => x.id !== f.id) }; tocar('paginas', P); desenharTudo();
+    aviso('Imagem apagada', 5000, { rotulo: 'Desfazer', fazer: () => { P.fundo = { ...P.fundo, figs: antes }; tocar('paginas', P); desenharTudo(); } });
+    return;
+  }
+  const r = cx.folha.getBoundingClientRect(), tam = !!e.target.closest('.figTam');
+  const ini = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y, fw: f.w };
+  d.setPointerCapture(e.pointerId);
+  const mov = ev => {
+    const dx = (ev.clientX - ini.x) / r.width / V.z, dy = (ev.clientY - ini.y) / r.height / V.z;
+    if (tam){ f.w = limitar(ini.fw + dx, .05, 1.2); f.h = f.w * (f.ar || 1) / ASP; }
+    else { f.x = limitar(ini.fx + dx, -f.w * .8, .95); f.y = limitar(ini.fy + dy, -f.h * .8, .97); }
+    Object.assign(d.style, { left: (f.x * 100) + '%', top: (f.y * 100) + '%', width: (f.w * 100) + '%', height: (f.h * 100) + '%' });
+    if (!quadro){ quadro = requestAnimationFrame(() => { quadro = 0; desenharFundo(); }); }
+  };
+  let quadro = 0;
+  const fim = () => { d.removeEventListener('pointermove', mov); d.removeEventListener('pointerup', fim); d.removeEventListener('pointercancel', fim); tocar('paginas', P); desenharFundo(); };
+  d.addEventListener('pointermove', mov); d.addEventListener('pointerup', fim); d.addEventListener('pointercancel', fim);
+});
+
+/* =====================================================================
    CAIXAS DE TEXTO
    ===================================================================== */
 function montarTextos(){
   cx.camada.innerHTML = '';
   if (!P) return;
+  ((P.fundo && P.fundo.figs) || []).forEach(f => cx.camada.appendChild(criarMolduraFig(f)));
   (P.textos || []).forEach(t => cx.camada.appendChild(criarCaixa(t)));
   pintarFerramentas();
 }
@@ -1272,7 +1412,7 @@ function fecharPainel(){ const v = $('#veu'); if (v) v.remove(); }
 const cab = t => `<h2><span>${t}</span><button class="fechar" data-fechar title="Fechar">×</button></h2>`;
 
 function painelNovaPagina(){
-  const ordem = ['pautada', 'pontilhada', 'sermao', 'materia', 'branco', 'divisoria'];
+  const ordem = ['pautada', 'pontilhada', 'sermao', 'materia', 'branco'];   // divisória só nasce com a aba nova (no índice)
   const sec = P ? secaoDe(P) : D.secoes.get(lerLS('pg.ultSec', '')) || secoesOrd()[0];
   painel(cab('Nova página') + `<p>Entra logo depois da página atual${sec ? `, na aba <b>${esc(sec.nome)}</b>` : ''}.</p><h3>Escolha o modelo</h3>
     <div class="modelos">${ordem.map(m => `<button class="modelo${m === est.ultModelo ? ' on' : ''}" data-m="${m}"><canvas></canvas>${MODELOS[m]}</button>`).join('')}</div>
