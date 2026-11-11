@@ -96,7 +96,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .cores{display:flex;gap:10px;flex-wrap:wrap}
 .cores button{width:38px;height:38px;border-radius:50%;border:3px solid transparent;padding:0}
 .cores button.on{border-color:var(--azul);box-shadow:0 0 0 2px var(--ouro)}
-.modelos{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.modelos{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 @media (max-width:520px){.modelos{grid-template-columns:repeat(2,1fr)}}
 .modelo{border:2px solid var(--borda);border-radius:12px;background:transparent;padding:8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:13px;font-weight:600}
 .modelo canvas{width:100%;aspect-ratio:3/4;border-radius:4px;box-shadow:0 1px 5px rgba(0,0,0,.15);background:#fff}
@@ -113,6 +113,24 @@ button{font:inherit;color:inherit;cursor:pointer}
 .abaLinha i{width:22px;height:22px;border-radius:6px;flex:none}
 .abaLinha span{flex:1;font-size:15px}
 .abaLinha button{border:1px solid var(--borda);background:transparent;border-radius:8px;min-width:34px;height:32px;font-size:14px}
+
+/* ---------- estante ---------- */
+#estante{position:fixed;inset:0;z-index:40;background:var(--fundo);display:flex;flex-direction:column}
+#estante .eb{background:var(--barra);color:var(--barra-tx);padding:calc(env(safe-area-inset-top,0px) + 8px) 14px 10px;display:flex;align-items:center;gap:8px}
+#estante .eb h1{flex:1;margin:0;font-family:Cinzel,Georgia,serif;font-size:20px;letter-spacing:.5px}
+#estante .eb small{display:block;font-family:Georgia,serif;font-style:italic;font-size:12px;color:var(--barra-sub);letter-spacing:0}
+#estante .prateleira{flex:1;overflow:auto;padding:28px 26px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:30px 26px;align-content:start}
+.livro{cursor:pointer;position:relative;border:none;padding:0;background:transparent;text-align:left;display:flex;flex-direction:column;gap:8px}
+.capa{position:relative;aspect-ratio:3/4;border-radius:6px 14px 14px 6px;box-shadow:0 8px 20px rgba(0,0,0,.22), inset 10px 0 0 rgba(0,0,0,.12);padding:22px 20px 18px 26px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.capa b{font-family:Cinzel,Georgia,serif;font-size:19px;line-height:1.2;word-break:break-word}
+.capa .etq{background:rgba(255,255,255,.88);color:#3A3A3A;border-radius:6px;padding:8px 10px;font-family:Cinzel,Georgia,serif;font-size:16px;line-height:1.2}
+.capa .linguetas{position:absolute;right:0;top:14%;display:flex;flex-direction:column;gap:3px}
+.capa .linguetas i{display:block;width:9px;height:22px;border-radius:3px 0 0 3px;opacity:.95}
+.capa small{font-size:12px;opacity:.85}
+.livro .rodape{display:flex;align-items:center;justify-content:space-between;gap:6px;color:var(--sub);font-size:12.5px}
+.livro .rodape button{border:1px solid var(--borda);background:var(--painel);color:var(--tx);border-radius:8px;height:30px;padding:0 10px;font-size:13px}
+.livro.atual .capa{outline:3px solid var(--ouro);outline-offset:3px}
+.livro.novo .capa{background:transparent;border:2px dashed var(--borda);box-shadow:none;align-items:center;justify-content:center;color:var(--sub);font-size:15px;font-weight:600}
 
 /* ---------- avisos ---------- */
 #aviso{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;
@@ -136,6 +154,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 <div id="app">
   <header class="barra">
     <div class="b1">
+      <button class="bt" id="bEstante" title="Estante (todos os cadernos)"></button>
       <button class="bt" id="bIndice" title="Índice"></button>
       <button class="bt" id="bPaginas" title="Páginas desta aba"></button>
       <div class="titulo"><b id="tTitulo">Índice</b><small id="tSub"></small></div>
@@ -173,7 +192,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.1.0';
+const VERSAO = '1.2.0';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -198,6 +217,7 @@ function aviso(msg, ms = 2800, acao){
 /* ---------- ícones ---------- */
 const ic = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const I = {
+  estante: ic('<path d="M4 19V5M8 19V5M12 19V7l4-2 4 14"/><path d="M3 19h18"/>'),
   indice: ic('<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>'),
   paginas: ic('<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="9" rx="1"/><rect x="3" y="15" width="7" height="6" rx="1"/><rect x="14" y="15" width="7" height="6" rx="1"/>'),
   ant: ic('<path d="M15 18l-6-6 6-6"/>'), seg: ic('<path d="M9 18l6-6-6-6"/>'),
@@ -224,23 +244,25 @@ const I = {
    DADOS — memória + IndexedDB (no aparelho) + Supabase (nuvem)
    ===================================================================== */
 const PASTEIS = ['#D99B94', '#D6C3D1', '#B7C9CC', '#E4BB96', '#BED1B6', '#EAD38F'];
-const MODELOS = { pautada: 'Pautada', materia: 'Matéria', branco: 'Em branco', divisoria: 'Divisória', imagem: 'PDF / imagem' };
+const MODELOS = { pautada: 'Pautada', pontilhada: 'Pontilhada', sermao: 'Sermão / estudo', materia: 'Matéria', branco: 'Em branco', divisoria: 'Divisória', imagem: 'PDF / imagem' };
 const CAMPOS = {
-  secoes: ['id', 'nome', 'cor', 'ordem', 'atualizado_em', 'apagado'],
+  cadernos: ['id', 'nome', 'cor', 'ordem', 'atualizado_em', 'apagado'],
+  secoes: ['id', 'caderno_id', 'nome', 'cor', 'ordem', 'atualizado_em', 'apagado'],
   paginas: ['id', 'secao_id', 'ordem', 'modelo', 'tinta', 'textos', 'marcas', 'fundo', 'atualizado_em', 'apagado']
 };
-const TABELA = { secoes: 'cd_secoes', paginas: 'cd_paginas' };
-const D = { secoes: new Map(), paginas: new Map() };
+const TABELA = { cadernos: 'cd_cadernos', secoes: 'cd_secoes', paginas: 'cd_paginas' };
+const TIPOS = ['cadernos', 'secoes', 'paginas'];
+const D = { cadernos: new Map(), secoes: new Map(), paginas: new Map() };
 
 const IDB = (() => {
   let dbp = null, falhou = false;
   function abrir(){
     if (dbp) return dbp;
     dbp = new Promise((ok, erro) => {
-      const r = indexedDB.open('pergaminho', 2);
+      const r = indexedDB.open('pergaminho', 3);
       r.onupgradeneeded = () => {
         const d = r.result;
-        ['secoes', 'paginas'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
+        ['cadernos', 'secoes', 'paginas'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
         if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta');
         if (!d.objectStoreNames.contains('imagens')) d.createObjectStore('imagens', { keyPath: 'id' });
       };
@@ -270,11 +292,15 @@ const IDB = (() => {
     meta: k => tx('meta', 'readonly', st => st.get(k)),
     metaPor: (k, v) => tx('meta', 'readwrite', st => st.put(v, k)),
     pegar: (s, k) => tx(s, 'readonly', st => st.get(k)),
-    zerar: () => Promise.all(['secoes', 'paginas', 'meta', 'imagens'].map(s => tx(s, 'readwrite', st => st.clear())))
+    zerar: () => Promise.all(['cadernos', 'secoes', 'paginas', 'meta', 'imagens'].map(s => tx(s, 'readwrite', st => st.clear())))
   };
 })();
 
-const secoesOrd = () => [...D.secoes.values()].filter(s => !s.apagado).sort((a, b) => a.ordem - b.ordem);
+let cadernoAtual = lerLS('pg.caderno', null);
+const cadernosOrd = () => [...D.cadernos.values()].filter(c => !c.apagado).sort((a, b) => a.ordem - b.ordem);
+const secoesDe = cid => [...D.secoes.values()].filter(s => !s.apagado && s.caderno_id === cid).sort((a, b) => a.ordem - b.ordem);
+const secoesOrd = () => secoesDe(cadernoAtual);
+const paginasDoCaderno = cid => secoesDe(cid).flatMap(s => paginasDe(s.id));
 const paginasDe = sid => [...D.paginas.values()].filter(p => !p.apagado && p.secao_id === sid).sort((a, b) => a.ordem - b.ordem);
 const sequencia = () => ['indice', ...secoesOrd().flatMap(s => paginasDe(s.id).map(p => p.id))];
 const secaoDe = p => (p && D.secoes.get(p.secao_id)) || null;
@@ -380,6 +406,28 @@ function modelo(ctx, pag, W, H, v, secaoCor){
   }
   else if (m === 'pautada'){
     for (let y = .075; y < .952; y += .0262) linha(.05, y, .95);
+    rodape();
+  }
+  else if (m === 'pontilhada'){
+    const dy = .03 / ASP, r = Math.max(.8, L(.0016));
+    ctx.fillStyle = '#C2C2C2'; ctx.beginPath();
+    for (let y = .045; y < .955; y += dy) for (let x = .05; x < .951; x += .03){ ctx.moveTo(X(x) + r, Y(y)); ctx.arc(X(x), Y(y), r, 0, 7); }
+    ctx.fill();
+    rodape();
+  }
+  else if (m === 'sermao'){
+    const destaque = secaoCor || '#C9A227';
+    texto('Sermão / Estudo', .055, .062, .036, { cor: '#4F4F4F', peso: 600 });
+    const rot = (t, x, y) => texto(t, x, y, .0115, { cor: '#8C8C8C', esp: .0012 });
+    [['TEMA:', .055, .1, .55], ['TEXTO BÍBLICO:', .055, .126, .55], ['DATA:', .63, .1, .315], ['LOCAL:', .63, .126, .315]].forEach(([t, x, y, w]) => { ret(x, y, w, .02, .002, '#EFEFEF'); rot(t, x + .01, y + .01); });
+    rot('PROPOSIÇÃO', .055, .172); ret(.055, .183, .89, .034, .003, '#F5F5F5');
+    let y = .245;
+    [['INTRODUÇÃO', 3], ['1º PONTO', 3], ['2º PONTO', 3], ['3º PONTO', 3], ['4º PONTO', 3], ['CONCLUSÃO / APELO', 3]].forEach(([t, n]) => {
+      ret(.055, y - .008, .008, .016, .002, destaque); rot(t, .072, y);
+      y += .012;
+      for (let i = 0; i < n; i++){ y += .0255; linha(.055, y, .945); }
+      y += .028;
+    });
     rodape();
   }
   else if (m === 'imagem'){
@@ -589,7 +637,7 @@ async function processarArquivo(arq, nome, onde){
   if (onde === 'aqui' && P){ sid = P.secao_id; depois = P.id; }
   else {
     const secs = secoesOrd();
-    const s = { id: novoId(), nome, cor: PASTEIS[secs.length % 6], ordem: secs.length ? secs[secs.length - 1].ordem + 1 : 1, apagado: false };
+    const s = { id: novoId(), caderno_id: garantirCadernoAtual(), nome, cor: PASTEIS[secs.length % 6], ordem: secs.length ? secs[secs.length - 1].ordem + 1 : 1, apagado: false };
     tocar('secoes', s); sid = s.id; depois = null;
   }
   const lista = paginasDe(sid);
@@ -655,7 +703,7 @@ async function exportarPDF(qual){
   let paginas = [], nome = 'caderno';
   if (qual === 'pagina' && P){ paginas = [P]; const s = secaoDe(P); nome = ((s && s.nome) || 'pagina') + '-pagina-' + (paginasDe(P.secao_id).findIndex(p => p.id === P.id) + 1); }
   else if (qual === 'aba'){ const sid = P ? P.secao_id : (secoesOrd()[0] || {}).id; paginas = paginasDe(sid); nome = ((D.secoes.get(sid) || {}).nome) || 'aba'; }
-  else { paginas = secoesOrd().flatMap(s => paginasDe(s.id)); nome = 'Pergaminho-caderno'; }
+  else { paginas = paginasDoCaderno(cadernoAtual); nome = ((D.cadernos.get(cadernoAtual) || {}).nome) || 'Pergaminho-caderno'; }
   if (!paginas.length){ aviso('Nada para exportar aqui.'); return; }
   const { jsPDF } = window.jspdf, PW = 595.28, PH = PW * ASP;
   const doc = new jsPDF({ unit: 'pt', format: [PW, PH], compress: true });
@@ -684,7 +732,7 @@ function painelExportar(){
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       ${P ? '<button class="botao" data-q="pagina">Só esta página</button>' : ''}
       ${s ? `<button class="botao" data-q="aba">A aba inteira: ${esc(s.nome)} (${paginasDe(s.id).length} págs.)</button>` : ''}
-      <button class="botao forte" data-q="tudo">O caderno inteiro (${secoesOrd().reduce((n, x) => n + paginasDe(x.id).length, 0)} págs.)</button></div>`, c => {
+      <button class="botao forte" data-q="tudo">O caderno “${esc((D.cadernos.get(cadernoAtual) || {}).nome || '')}” inteiro (${secoesOrd().reduce((n, x) => n + paginasDe(x.id).length, 0)} págs.)</button></div>`, c => {
     c.addEventListener('click', e => { const b = e.target.closest('[data-q]'); if (b) exportarPDF(b.dataset.q); });
   });
 }
@@ -695,7 +743,9 @@ function painelExportar(){
 function abrir(id){
   gravarTintaAgora();
   if (id !== 'indice' && (!D.paginas.get(id) || D.paginas.get(id).apagado)) id = 'indice';
+  if (id !== 'indice'){ const s = secaoDe(D.paginas.get(id)); if (!s || s.apagado) id = 'indice'; else if (s.caderno_id !== cadernoAtual){ cadernoAtual = s.caderno_id; gravarLS('pg.caderno', cadernoAtual); } }
   atualId = id; gravarLS('pg.atual', id);
+  const mapa = lerLS('pg.atualPorCaderno', {}); mapa[cadernoAtual] = id; gravarLS('pg.atualPorCaderno', mapa);
   P = id === 'indice' ? null : D.paginas.get(id);
   if (P) gravarLS('pg.ultSec', P.secao_id);
   tracos = P ? (P.tinta || []).slice() : []; desf = []; refz = []; atual = null; ativo = null;
@@ -757,7 +807,7 @@ cx.abas.addEventListener('click', e => {
 /* ---------- barra de cima ---------- */
 function pintarBarra(){
   const seq = sequencia(), i = seq.indexOf(atualId);
-  if (!P){ $('#tTitulo').textContent = 'Índice'; $('#tSub').textContent = `${secoesOrd().length} abas`; $('#tNum').textContent = ''; }
+  if (!P){ const c = D.cadernos.get(cadernoAtual); $('#tTitulo').textContent = (c && c.nome) || 'Índice'; $('#tSub').textContent = `Índice · ${secoesOrd().length} abas`; $('#tNum').textContent = ''; }
   else {
     const s = secaoDe(P), pgs = paginasDe(P.secao_id), k = pgs.findIndex(p => p.id === P.id);
     $('#tTitulo').textContent = (s && s.nome) || 'Sem nome';
@@ -1060,7 +1110,7 @@ function ordemDepois(lista, idx){
 }
 function novaPagina(mod){
   let sid = P ? P.secao_id : lerLS('pg.ultSec', null);
-  if (!sid || !D.secoes.get(sid) || D.secoes.get(sid).apagado){ const s = secoesOrd()[0]; sid = s ? s.id : criarAba('Anotações', null, false).id; }
+  if (!sid || !D.secoes.get(sid) || D.secoes.get(sid).apagado || D.secoes.get(sid).caderno_id !== cadernoAtual){ const s = secoesOrd()[0]; sid = s ? s.id : criarAba('Anotações', null, false).id; }
   const lista = paginasDe(sid), idx = P ? lista.findIndex(p => p.id === P.id) : lista.length - 1;
   const pg = { id: novoId(), secao_id: sid, ordem: ordemDepois(lista, idx), modelo: mod, tinta: [], textos: [], marcas: {}, apagado: false };
   tocar('paginas', pg);
@@ -1069,7 +1119,7 @@ function novaPagina(mod){
 }
 function criarAba(nome, cor, abrirDepois = true){
   const secs = secoesOrd();
-  const s = { id: novoId(), nome: nome || 'Nova aba', cor: cor || PASTEIS[secs.length % 6], ordem: secs.length ? secs[secs.length - 1].ordem + 1 : 1, apagado: false };
+  const s = { id: novoId(), caderno_id: garantirCadernoAtual(), nome: nome || 'Nova aba', cor: cor || PASTEIS[secs.length % 6], ordem: secs.length ? secs[secs.length - 1].ordem + 1 : 1, apagado: false };
   tocar('secoes', s);
   const div = { id: novoId(), secao_id: s.id, ordem: 1, modelo: 'divisoria', tinta: [], textos: [], marcas: {}, apagado: false };
   const pg = { id: novoId(), secao_id: s.id, ordem: 2, modelo: est.ultModelo || 'pautada', tinta: [], textos: [], marcas: {}, apagado: false };
@@ -1097,6 +1147,117 @@ function apagarPaginaAtual(bt){
   aviso(resto.length ? 'Página apagada' : 'Página apagada · a aba ficou vazia (apague a aba pelo índice, se quiser)', 3500);
 }
 
+/* =====================================================================
+   ESTANTE · vários cadernos
+   ===================================================================== */
+const CORES_CAPA = ['#0F1B33', '#5B2A3A', '#2F4A3F', '#6B4F2A', '#3E5C76', '#4B3F6B', '#2B2B2B', '#C9A227', '#D99B94', '#B7C9CC', '#BED1B6', '#E4BB96'];
+const capaClara = c => { const n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (r * 299 + g * 587 + b * 114) / 1000 > 150; };
+
+/* todo usuário tem um caderno principal com o mesmo id da conta (assim o iPad e o Mac não criam dois);
+   as abas antigas, que ainda não têm caderno, vão para ele */
+function garantirCadernos(){
+  if (!uid) return;
+  const principal = uid;
+  const soltas = [...D.secoes.values()].filter(s => !s.caderno_id);
+  if ((soltas.length || !cadernosOrd().length) && !D.cadernos.get(principal)){
+    tocar('cadernos', { id: principal, nome: 'Meu caderno', cor: '#0F1B33', ordem: 1, apagado: false });
+  }
+  soltas.forEach(s => { if (s.caderno_id !== principal){ s.caderno_id = principal; tocar('secoes', s); } });
+  if (!cadernoAtual || !D.cadernos.get(cadernoAtual) || D.cadernos.get(cadernoAtual).apagado){
+    const c = cadernosOrd()[0]; cadernoAtual = c ? c.id : null; gravarLS('pg.caderno', cadernoAtual);
+  }
+}
+function garantirCadernoAtual(){ if (!cadernoAtual || !D.cadernos.get(cadernoAtual)) garantirCadernos(); return cadernoAtual; }
+function abrirCaderno(cid){
+  gravarTintaAgora();
+  cadernoAtual = cid; gravarLS('pg.caderno', cid);
+  esconderEstante();
+  const ult = lerLS('pg.atualPorCaderno', {})[cid];
+  const p = ult && D.paginas.get(ult);
+  abrir(p && !p.apagado && (secaoDe(p) || {}).caderno_id === cid ? ult : 'indice');
+}
+const estanteAberta = () => !!$('#estante');
+function mostrarEstante(){
+  gravarTintaAgora(); fecharPainel();
+  gravarLS('pg.naEstante', true);
+  if (!$('#estante')){
+    const d = document.createElement('div'); d.id = 'estante';
+    d.innerHTML = `<div class="eb"><h1>Estante<small>“…traze os livros, especialmente os pergaminhos.” 2Tm 4.13</small></h1>
+      <span class="versao" data-versao>v${VERSAO}</span><button class="sync" id="eSync"></button>
+      <button class="bt" id="eTema" title="Modo claro / escuro"></button><button class="bt" id="eAjustes" title="Ajustes">${I.ajustes}</button></div>
+      <div class="prateleira" id="prateleira"></div>`;
+    document.body.appendChild(d);
+    $('#eTema').onclick = () => { $('#bTema').click(); pintarEstante(); };
+    $('#eAjustes').onclick = painelAjustes;
+    $('#eSync').onclick = () => sincronizar(true);
+    $('#prateleira').addEventListener('click', e => {
+      const ed = e.target.closest('[data-editar]'); if (ed){ painelCaderno(ed.dataset.editar); return; }
+      const l = e.target.closest('.livro'); if (!l) return;
+      if (l.classList.contains('novo')) painelCaderno(null); else abrirCaderno(l.dataset.id);
+    });
+  }
+  pintarEstante();
+}
+function esconderEstante(){ const d = $('#estante'); if (d) d.remove(); gravarLS('pg.naEstante', false); }
+function pintarEstante(){
+  const pr = $('#prateleira'); if (!pr) return;
+  $('#eTema').innerHTML = lerLS('pg.tema', 'claro') === 'escuro' ? I.sol : I.lua;
+  $('#eSync').className = $('#bSync').className; $('#eSync').title = $('#bSync').title;
+  pr.innerHTML = cadernosOrd().map(c => {
+    const secs = secoesDe(c.id), n = paginasDoCaderno(c.id).length, clara = capaClara(c.cor || '#0F1B33');
+    const datas = [c.atualizado_em, ...secs.map(s => s.atualizado_em), ...paginasDoCaderno(c.id).map(p => p.atualizado_em)].filter(Boolean).sort();
+    const quando = datas.length ? new Date(datas[datas.length - 1]).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '';
+    return `<div role="button" class="livro${c.id === cadernoAtual ? ' atual' : ''}" data-id="${c.id}">
+      <div class="capa" style="background:${c.cor};color:${clara ? '#2A2A2A' : '#F4EBD3'}">
+        <div class="etq">${esc(c.nome)}</div>
+        <div class="linguetas">${secs.slice(0, 10).map(s => `<i style="background:${s.cor}"></i>`).join('')}</div>
+        <small>${secs.length} ${secs.length === 1 ? 'aba' : 'abas'} · ${n} ${n === 1 ? 'página' : 'páginas'}</small>
+      </div>
+      <div class="rodape"><span>${quando ? 'Mexido em ' + quando : ''}</span><button data-editar="${c.id}">Editar</button></div>
+    </div>`;
+  }).join('') + `<div role="button" class="livro novo"><div class="capa">+ Novo caderno</div><div class="rodape">&nbsp;</div></div>`;
+}
+function painelCaderno(cid){
+  const c = cid ? D.cadernos.get(cid) : null;
+  let cor = c ? c.cor : CORES_CAPA[cadernosOrd().length % CORES_CAPA.length];
+  painel(cab(c ? 'Caderno' : 'Novo caderno') + `<h3>Nome</h3><input class="campo" id="cdNome" maxlength="40" placeholder="Ex.: Faculdade, Sermões 2027, Reuniões" value="${esc(c ? c.nome : '')}">
+    <h3>Cor da capa</h3><div class="cores" id="cdCores">${CORES_CAPA.map(x => `<button data-c="${x}" style="background:${x}"></button>`).join('')}</div>
+    ${c ? `<h3>Posição na estante</h3><div style="display:flex;gap:10px"><button class="botao" id="cdEsq">← Para a esquerda</button><button class="botao" id="cdDir">Para a direita →</button></div>` : '<p style="margin-top:14px">O caderno novo começa com uma aba “Anotações”.</p>'}
+    <div style="display:flex;justify-content:space-between;gap:10px;margin-top:20px">
+      ${c ? '<button class="botao perigo" id="cdApagar">Apagar caderno</button>' : '<span></span>'}
+      <button class="botao forte" id="cdOk">${c ? 'Salvar' : 'Criar caderno'}</button></div>`, k => {
+    const pintar = () => $$('#cdCores button', k).forEach(b => b.classList.toggle('on', b.dataset.c === cor));
+    pintar();
+    $('#cdCores', k).onclick = e => { const b = e.target.closest('[data-c]'); if (b){ cor = b.dataset.c; pintar(); } };
+    $('#cdOk', k).onclick = () => {
+      const nome = $('#cdNome', k).value.trim(); if (!nome){ $('#cdNome', k).focus(); return; }
+      if (c){ c.nome = nome; c.cor = cor; tocar('cadernos', c); fecharPainel(); pintarEstante(); pintarBarra(); return; }
+      const lista = cadernosOrd();
+      const novo = { id: novoId(), nome, cor, ordem: lista.length ? lista[lista.length - 1].ordem + 1 : 1, apagado: false };
+      tocar('cadernos', novo); fecharPainel();
+      cadernoAtual = novo.id; gravarLS('pg.caderno', novo.id);
+      criarAba('Anotações', PASTEIS[0], false);
+      pintarEstante(); aviso('Caderno “' + nome + '” criado · toque nele para abrir');
+    };
+    if (!c){ setTimeout(() => $('#cdNome', k).focus(), 80); return; }
+    const mover = d => {
+      const lista = cadernosOrd(), i = lista.findIndex(x => x.id === c.id), j = i + d; if (j < 0 || j >= lista.length) return;
+      const o = c.ordem; c.ordem = lista[j].ordem; lista[j].ordem = o; tocar('cadernos', c); tocar('cadernos', lista[j]); pintarEstante();
+    };
+    $('#cdEsq', k).onclick = () => mover(-1); $('#cdDir', k).onclick = () => mover(1);
+    let armado = false;
+    $('#cdApagar', k).onclick = e => {
+      if (cadernosOrd().length <= 1){ aviso('Este é o único caderno da estante — crie outro antes de apagar este.'); return; }
+      const b = e.currentTarget, n = paginasDoCaderno(c.id).length;
+      if (!armado){ armado = true; b.classList.add('armado'); b.textContent = `Apagar “${c.nome}” com ${n} páginas?`; return; }
+      secoesDe(c.id).forEach(s => { paginasDe(s.id).forEach(p => { p.apagado = true; tocar('paginas', p); }); s.apagado = true; tocar('secoes', s); });
+      c.apagado = true; tocar('cadernos', c);
+      if (cadernoAtual === c.id){ cadernoAtual = cadernosOrd()[0].id; gravarLS('pg.caderno', cadernoAtual); abrir('indice'); }
+      fecharPainel(); pintarEstante(); aviso('Caderno apagado');
+    };
+  });
+}
+
 /* ---------- painéis (folhas que sobem) ---------- */
 function painel(html, aoMontar){
   fecharPainel();
@@ -1111,7 +1272,7 @@ function fecharPainel(){ const v = $('#veu'); if (v) v.remove(); }
 const cab = t => `<h2><span>${t}</span><button class="fechar" data-fechar title="Fechar">×</button></h2>`;
 
 function painelNovaPagina(){
-  const ordem = ['pautada', 'materia', 'branco', 'divisoria'];
+  const ordem = ['pautada', 'pontilhada', 'sermao', 'materia', 'branco', 'divisoria'];
   const sec = P ? secaoDe(P) : D.secoes.get(lerLS('pg.ultSec', '')) || secoesOrd()[0];
   painel(cab('Nova página') + `<p>Entra logo depois da página atual${sec ? `, na aba <b>${esc(sec.nome)}</b>` : ''}.</p><h3>Escolha o modelo</h3>
     <div class="modelos">${ordem.map(m => `<button class="modelo${m === est.ultModelo ? ' on' : ''}" data-m="${m}"><canvas></canvas>${MODELOS[m]}</button>`).join('')}</div>
@@ -1145,6 +1306,7 @@ function painelAba(sid){
   const s = D.secoes.get(sid); if (!s) return;
   painel(cab('Aba') + `<h3>Nome</h3><input class="campo" id="abNome" maxlength="40" value="${esc(s.nome)}">
     <h3>Cor</h3><div class="cores" id="abCores">${PASTEIS.map(c => `<button data-c="${c}" style="background:${c}"></button>`).join('')}</div>
+    ${cadernosOrd().length > 1 ? `<h3>Caderno</h3><select class="campo" id="abCad">${cadernosOrd().map(c => `<option value="${c.id}"${c.id === s.caderno_id ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select>` : ''}
     <div style="display:flex;justify-content:space-between;gap:10px;margin-top:20px">
       <button class="botao perigo" id="abApagar">Apagar aba</button>
       <button class="botao forte" id="abOk">Salvar</button></div>`, c => {
@@ -1152,7 +1314,12 @@ function painelAba(sid){
     const pintar = () => $$('#abCores button', c).forEach(b => b.classList.toggle('on', b.dataset.c === cor));
     pintar();
     $('#abCores', c).onclick = e => { const b = e.target.closest('[data-c]'); if (b){ cor = b.dataset.c; pintar(); } };
-    $('#abOk', c).onclick = () => { s.nome = $('#abNome', c).value.trim() || s.nome; s.cor = cor; tocar('secoes', s); fecharPainel(); desenharTudo(); pintarBarra(); };
+    $('#abOk', c).onclick = () => {
+      s.nome = $('#abNome', c).value.trim() || s.nome; s.cor = cor;
+      const novoCad = $('#abCad', c) && $('#abCad', c).value;
+      if (novoCad && novoCad !== s.caderno_id){ const d = secoesDe(novoCad); s.caderno_id = novoCad; s.ordem = d.length ? d[d.length - 1].ordem + 1 : 1; tocar('secoes', s); fecharPainel(); abrir('indice'); aviso('Aba movida para “' + D.cadernos.get(novoCad).nome + '”'); return; }
+      tocar('secoes', s); fecharPainel(); desenharTudo(); pintarBarra();
+    };
     let armado = false;
     $('#abApagar', c).onclick = e => {
       const b = e.currentTarget;
@@ -1283,6 +1450,7 @@ function limpo(tipo, o){ const r = {}; CAMPOS[tipo].forEach(k => { if (o[k] !== 
 function exportar(){
   gravarTintaAgora();
   const pacote = { app: 'Pergaminho', versao: VERSAO, exportado_em: agora(),
+    cadernos: [...D.cadernos.values()].filter(c => !c.apagado).map(c => limpo('cadernos', c)),
     secoes: [...D.secoes.values()].filter(s => !s.apagado).map(s => limpo('secoes', s)),
     paginas: [...D.paginas.values()].filter(p => !p.apagado).map(p => limpo('paginas', p)) };
   const blob = new Blob([JSON.stringify(pacote)], { type: 'application/json' });
@@ -1296,11 +1464,11 @@ async function importar(arq){
     const j = JSON.parse(await arq.text());
     if (j.app !== 'Pergaminho') throw new Error('arquivo de outro app');
     let n = 0;
-    ['secoes', 'paginas'].forEach(tipo => (j[tipo] || []).forEach(r => {
+    TIPOS.forEach(tipo => (j[tipo] || []).forEach(r => {
       const l = D[tipo].get(r.id);
       if (!l || new Date(r.atualizado_em) > new Date(l.atualizado_em)){ const o = limpo(tipo, r); D[tipo].set(o.id, o); tocar(tipo, o); n++; }
     }));
-    fecharPainel(); abrir(atualId); aviso(n ? `Backup importado (${n} itens)` : 'Nada novo no backup — tudo já estava aqui');
+    garantirCadernos(); fecharPainel(); abrir(atualId); aviso(n ? `Backup importado (${n} itens)` : 'Nada novo no backup — tudo já estava aqui');
   } catch (e) { aviso('Não consegui ler esse arquivo: ' + e.message, 5000); }
 }
 
@@ -1325,7 +1493,7 @@ async function atualizarApp(){
 /* =====================================================================
    LOGIN E SINCRONIZAÇÃO COM O SUPABASE
    ===================================================================== */
-let avisouSQL2 = false, ultimoErro = '', sb = null, uid = lerLS('pg.uid', null), sincronizando = false, deNovo = false, tEnvio = null, estadoSync = 'off', avisouSQL = false;
+let avisouSQL2 = false, avisouSQL3 = false, ultimoErro = '', sb = null, uid = lerLS('pg.uid', null), sincronizando = false, deNovo = false, tEnvio = null, estadoSync = 'off', avisouSQL = false;
 
 function mostrarLogin(msg){
   if ($('#login')){ if (msg) $('#loginErro').textContent = msg; return; }
@@ -1378,6 +1546,7 @@ function pintarSync(){
   const b = $('#bSync');
   const st = !navigator.onLine || !sb || !uid ? 'off' : estadoSync === 'erro' ? 'erro' : pend ? 'pend' : 'ok';
   b.className = 'sync ' + st;
+  const e2 = $('#eSync'); if (e2){ e2.className = b.className; }
   b.title = { off: 'Sem internet — tudo fica guardado no iPad', erro: 'Erro ao sincronizar — toque para tentar de novo', pend: 'Alterações esperando para subir', ok: 'Tudo sincronizado' }[st];
 }
 
@@ -1401,7 +1570,9 @@ async function sincronizar(manual){
     const m = (e && (e.message || e.code)) || String(e);
     ultimoErro = `${new Date().toLocaleTimeString('pt-BR')} · ${(e && e.code) ? e.code + ' · ' : ''}${m}${e && e.details ? ' · ' + e.details : ''}${e && e.hint ? ' · ' + e.hint : ''}`;
     console.error('[Pergaminho] sincronização:', e);
-    if (/fundo|Bucket not found|bucket|row-level security.*objects|STORAGE/i.test(m + ' ' + (e && e.code) + ' ' + (e && e.details))){
+    if (/cd_cadernos|caderno_id/i.test(m + ' ' + (e && e.details))){
+      if (!avisouSQL3 || manual){ avisouSQL3 = true; aviso('Para sincronizar os cadernos da estante, rode no Supabase o arquivo caderno-etapa3.sql.', 10000); }
+    } else if (/fundo|Bucket not found|bucket|row-level security.*objects|STORAGE/i.test(m + ' ' + (e && e.code) + ' ' + (e && e.details))){
       if (!avisouSQL2 || manual){ avisouSQL2 = true; aviso('Para sincronizar as páginas de PDF, rode no Supabase o arquivo caderno-etapa2.sql. As demais páginas continuam sincronizando.', 10000); }
     } else if (/PGRST205|42P01|does not exist|schema cache/i.test(m + ' ' + (e && e.code))){
       if (!avisouSQL || manual){ avisouSQL = true; aviso('Falta rodar no Supabase o arquivo caderno.sql (tabelas do Pergaminho). Até lá, tudo fica guardado no iPad.', 9000); }
@@ -1415,7 +1586,7 @@ async function sincronizar(manual){
 
 async function enviar(){
   let erro = null;
-  for (const tipo of ['secoes', 'paginas']){
+  for (const tipo of TIPOS){
     const pend = [...D[tipo].values()].filter(o => o._p);
     for (let i = 0; i < pend.length; i += 15){
       const lote = pend.slice(i, i + 15);
@@ -1437,8 +1608,8 @@ async function enviar(){
 }
 
 async function receber(){
-  let mudou = false, atualMudou = false;
-  for (const tipo of ['secoes', 'paginas']){
+  let mudou = false, atualMudou = false, falha = null;
+  for (const tipo of TIPOS){ try {
     let ult = (await IDB.meta('ult_' + tipo)) || lerLS('pg.ult_' + tipo, '1970-01-01T00:00:00Z');
     for (let volta = 0; volta < 50; volta++){
       const { data, error } = await sb.from(TABELA[tipo]).select('*').gt('servidor_em', ult).order('servidor_em').limit(500);
@@ -1448,23 +1619,27 @@ async function receber(){
         if (!l || new Date(r.atualizado_em) > new Date(l.atualizado_em)){
           const o = limpo(tipo, r); D[tipo].set(o.id, o); IDB.por(tipo, o); mudou = true;
           if (tipo === 'paginas' && o.id === atualId) atualMudou = true;
-          if (tipo === 'secoes') atualMudou = true;
+          if (tipo !== 'paginas') atualMudou = true;
         } else if (l && l._p && l.atualizado_em === r.atualizado_em){ delete l._p; IDB.por(tipo, l); }
       }
       if (data.length) ult = data[data.length - 1].servidor_em;
       if (data.length < 500) break;
     }
     await IDB.metaPor('ult_' + tipo, ult); gravarLS('pg.ult_' + tipo, ult);
-  }
+  } catch (e) { falha = falha || e; } }
+  if (mudou) garantirCadernos();
+  if (mudou && estanteAberta()) pintarEstante();
   if (mudou){
     const desenhando = ativo !== null || pendenteTinta || (document.activeElement && document.activeElement.classList.contains('tx'));
     if (atualMudou && !desenhando) abrir(atualId);
     else { pintarAbas(); pintarBarra(); if (!P) desenharFundo(); }
   }
+  if (falha) throw falha;
 }
 
 /* primeira vez: cria uma aba para começar */
 function semente(){
+  garantirCadernos();
   if (secoesOrd().length) return;
   if (lerLS('pg.semeado', false) && [...D.secoes.values()].length) return;
   gravarLS('pg.semeado', true);
@@ -1483,6 +1658,7 @@ async function iniciar(){
   $$('[data-versao]').forEach(e => e.textContent = 'v' + VERSAO);
   aplicarTema(); montarFerramentas(); pintarFerramentas();
   $('#bIndice').onclick = () => abrir('indice');
+  $('#bEstante').innerHTML = I.estante; $('#bEstante').onclick = mostrarEstante;
   $('#bPaginas').onclick = painelPaginas;
   $('#bAnt').onclick = () => navegar(-1);
   $('#bSeg').onclick = () => navegar(1);
@@ -1493,10 +1669,13 @@ async function iniciar(){
   $('#bAjustes').onclick = painelAjustes;
 
   // dados do aparelho primeiro (abre na hora, mesmo sem internet)
-  const [ss, ps] = await Promise.all([IDB.todos('secoes'), IDB.todos('paginas')]);
+  const [cs, ss, ps] = await Promise.all([IDB.todos('cadernos'), IDB.todos('secoes'), IDB.todos('paginas')]);
+  (cs || []).forEach(c => D.cadernos.set(c.id, c));
   (ss || []).forEach(s => D.secoes.set(s.id, s));
   (ps || []).forEach(p => D.paginas.set(p.id, p));
+  garantirCadernos();
   abrir(atualId);
+  if (lerLS('pg.naEstante', false)) mostrarEstante();
   pintarSync();
 
   window.addEventListener('resize', () => {
