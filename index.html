@@ -171,7 +171,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.0.0';
+const VERSAO = '1.0.1';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -981,6 +981,7 @@ function painelAjustes(){
     <div class="linha"><span>Escrever também com o dedo</span><button class="botao" id="ajDedo">${est.dedo ? 'Ligado' : 'Desligado'}</button></div>
     <h3>Nuvem</h3>
     <div class="linha"><span>${uid ? 'Conta: ' + esc(lerLS('pg.email', '')) : 'Sem login'}<br><small style="color:var(--sub)">${ult ? 'Última sincronização: ' + new Date(ult).toLocaleString('pt-BR') : 'Ainda não sincronizou'}</small></span><button class="botao" id="ajSync">Sincronizar agora</button></div>
+    <div class="linha"><span><b>Diagnóstico</b><br><small style="color:var(--sub)" id="ajDiag">Consultando…</small></span></div>
     <h3>Cópia de segurança</h3>
     <div class="linha"><span>Baixar tudo num arquivo</span><button class="botao" id="ajExp">Exportar</button></div>
     <div class="linha"><span>Trazer de um arquivo</span><button class="botao" id="ajImp">Importar</button><input type="file" id="ajArq" accept=".json,application/json" class="oculto"></div>
@@ -988,6 +989,7 @@ function painelAjustes(){
     <div class="linha"><span>Pergaminho · <b>v${VERSAO}</b></span><button class="botao" id="ajVer">Verificar atualização</button></div>
     <div class="linha"><span>Recarregar a versão mais nova</span><button class="botao forte" id="ajAtu">🔄 Atualizar app</button></div>
     <div class="linha"><span>Sair da conta</span><button class="botao perigo" id="ajSair">Sair</button></div>`, c => {
+    diagnostico().then(t => { const d = $('#ajDiag', c); if (d) d.innerHTML = t; });
     $('#ajTema', c).onclick = () => { gravarLS('pg.tema', lerLS('pg.tema', 'claro') === 'escuro' ? 'claro' : 'escuro'); aplicarTema(); painelAjustes(); };
     $('#ajDedo', c).onclick = () => { est.dedo = !est.dedo; guardarEst(); pintarFerramentas(); painelAjustes(); };
     $('#ajSync', c).onclick = async () => { await sincronizar(true); painelAjustes(); };
@@ -998,6 +1000,23 @@ function painelAjustes(){
     $('#ajAtu', c).onclick = atualizarApp;
     $('#ajSair', c).onclick = sair;
   });
+}
+async function diagnostico(){
+  const pend = [...D.secoes.values(), ...D.paginas.values()].filter(o => o._p).length;
+  const aqui = `Neste aparelho: ${secoesOrd().length} abas, ${[...D.paginas.values()].filter(p => !p.apagado).length} páginas, ${pend} esperando para subir.`;
+  let nuvem = 'Na nuvem: —';
+  if (sb && navigator.onLine){
+    try {
+      const s = await sb.auth.getSession(), u = s.data && s.data.session && s.data.session.user;
+      if (!u) nuvem = 'Na nuvem: sem login válido neste aparelho';
+      else {
+        const a = await sb.from('cd_secoes').select('id', { count: 'exact', head: true }).eq('apagado', false);
+        const p = await sb.from('cd_paginas').select('id', { count: 'exact', head: true }).eq('apagado', false);
+        nuvem = (a.error || p.error) ? 'Na nuvem: erro · ' + esc((a.error || p.error).message) : `Na nuvem: ${a.count} abas, ${p.count} páginas (conta ${esc(u.email)})`;
+      }
+    } catch (e) { nuvem = 'Na nuvem: erro · ' + esc(e.message || e); }
+  }
+  return esc(aqui) + '<br>' + nuvem + (ultimoErro ? '<br><span style="color:#C0392B">Último erro: ' + esc(ultimoErro) + '</span>' : '');
 }
 function limpo(tipo, o){ const r = {}; CAMPOS[tipo].forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; }
 function exportar(){
@@ -1045,7 +1064,7 @@ async function atualizarApp(){
 /* =====================================================================
    LOGIN E SINCRONIZAÇÃO COM O SUPABASE
    ===================================================================== */
-let sb = null, uid = lerLS('pg.uid', null), sincronizando = false, deNovo = false, tEnvio = null, estadoSync = 'off', avisouSQL = false;
+let ultimoErro = '', sb = null, uid = lerLS('pg.uid', null), sincronizando = false, deNovo = false, tEnvio = null, estadoSync = 'off', avisouSQL = false;
 
 function mostrarLogin(msg){
   if ($('#login')){ if (msg) $('#loginErro').textContent = msg; return; }
@@ -1066,7 +1085,7 @@ function mostrarLogin(msg){
     if (r.error){ err.textContent = /invalid/i.test(r.error.message || '') ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar. Confira a internet.'; return; }
     try { localStorage.setItem('bispo-email', email); } catch {}
     definirUsuario(r.data.user); d.remove();
-    await sincronizar(); semente();
+    await sincronizar(); if (estadoSync === 'ok') semente();
   });
   setTimeout(() => { const a = $($('#lgEmail').value ? '#lgSenha' : '#lgEmail'); if (a) a.focus(); }, 80);
 }
@@ -1086,7 +1105,7 @@ async function iniciarNuvem(){
   sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { storageKey: 'bispo-auth', persistSession: true, autoRefreshToken: true } });
   let sess = null;
   try { const r = await sb.auth.getSession(); sess = r.data && r.data.session; } catch {}
-  if (sess){ definirUsuario(sess.user); await sincronizar(); semente(); }
+  if (sess){ definirUsuario(sess.user); await sincronizar(); if (estadoSync === 'ok') semente(); }
   else if (navigator.onLine || !uid) mostrarLogin();
   else { semente(); pintarSync(); }
   sb.auth.onAuthStateChange((ev, s) => { if (s && s.user) definirUsuario(s.user); });
@@ -1102,21 +1121,24 @@ function pintarSync(){
 }
 
 async function sincronizar(manual){
-  if (!sb || !uid || !navigator.onLine){ pintarSync(); if (manual) aviso('Sem internet agora. Tudo continua guardado no iPad.'); return; }
+  if (!sb || !uid || !navigator.onLine){ pintarSync(); if (manual) aviso(!navigator.onLine ? 'Sem internet agora. Tudo continua guardado no aparelho.' : 'Entre na sua conta para sincronizar.'); if (manual && navigator.onLine && sb && !uid) mostrarLogin(); return; }
+  try { const r = await sb.auth.getSession(); if (!(r.data && r.data.session)){ estadoSync = 'erro'; ultimoErro = 'Sem login válido neste aparelho'; pintarSync(); mostrarLogin('Entre de novo para sincronizar.'); return; } } catch {}
   if (sincronizando){ deNovo = true; return; }
   sincronizando = true;
   try {
     gravarTintaAgora();
     await enviar(); await receber();
-    estadoSync = 'ok'; gravarLS('pg.ultSync', agora());
+    estadoSync = 'ok'; ultimoErro = ''; gravarLS('pg.ultSync', agora());
     if (manual) aviso('Sincronizado ✓');
   } catch (e) {
     estadoSync = 'erro';
     const m = (e && (e.message || e.code)) || String(e);
-    if (/cd_secoes|cd_paginas|PGRST205|42P01|does not exist|schema cache/i.test(m + ' ' + (e && e.code))){
+    ultimoErro = `${new Date().toLocaleTimeString('pt-BR')} · ${(e && e.code) ? e.code + ' · ' : ''}${m}${e && e.details ? ' · ' + e.details : ''}${e && e.hint ? ' · ' + e.hint : ''}`;
+    console.error('[Pergaminho] sincronização:', e);
+    if (/PGRST205|42P01|does not exist|schema cache/i.test(m + ' ' + (e && e.code))){
       if (!avisouSQL || manual){ avisouSQL = true; aviso('Falta rodar no Supabase o arquivo caderno.sql (tabelas do Pergaminho). Até lá, tudo fica guardado no iPad.', 9000); }
     } else if (/JWT|token|401|403/i.test(m)){ mostrarLogin('Entre de novo para sincronizar.'); }
-    else if (manual) aviso('Erro ao sincronizar: ' + m, 6000);
+    else aviso('Não consegui sincronizar: ' + m, manual ? 9000 : 5000);
   } finally {
     sincronizando = false; pintarSync();
     if (deNovo){ deNovo = false; setTimeout(sincronizar, 300); }
@@ -1213,7 +1235,9 @@ async function iniciar(){
     else { sincronizar(); verificarVersao(); }
   });
   window.addEventListener('pagehide', gravarTintaAgora);
-  setInterval(() => sincronizar(), 60 * 1000);
+  setInterval(() => { if (!document.hidden) sincronizar(); }, 20 * 1000);
+  window.addEventListener('focus', () => sincronizar());
+  window.addEventListener('pageshow', () => sincronizar());
   setTimeout(verificarVersao, 5000);
   setInterval(verificarVersao, 30 * 60 * 1000);
 
