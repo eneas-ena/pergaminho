@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Josefin+Sans:wght@400;600&display=swap" rel="stylesheet">
 <script src="supabase.min.js"></script>
+<script src="jspdf.umd.min.js" defer></script>
 <style>
 :root{
   --azul:#0F1B33; --ouro:#C9A227;
@@ -172,7 +173,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.0.2';
+const VERSAO = '1.1.0';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -223,10 +224,10 @@ const I = {
    DADOS — memória + IndexedDB (no aparelho) + Supabase (nuvem)
    ===================================================================== */
 const PASTEIS = ['#D99B94', '#D6C3D1', '#B7C9CC', '#E4BB96', '#BED1B6', '#EAD38F'];
-const MODELOS = { pautada: 'Pautada', materia: 'Matéria', branco: 'Em branco', divisoria: 'Divisória' };
+const MODELOS = { pautada: 'Pautada', materia: 'Matéria', branco: 'Em branco', divisoria: 'Divisória', imagem: 'PDF / imagem' };
 const CAMPOS = {
   secoes: ['id', 'nome', 'cor', 'ordem', 'atualizado_em', 'apagado'],
-  paginas: ['id', 'secao_id', 'ordem', 'modelo', 'tinta', 'textos', 'marcas', 'atualizado_em', 'apagado']
+  paginas: ['id', 'secao_id', 'ordem', 'modelo', 'tinta', 'textos', 'marcas', 'fundo', 'atualizado_em', 'apagado']
 };
 const TABELA = { secoes: 'cd_secoes', paginas: 'cd_paginas' };
 const D = { secoes: new Map(), paginas: new Map() };
@@ -236,11 +237,12 @@ const IDB = (() => {
   function abrir(){
     if (dbp) return dbp;
     dbp = new Promise((ok, erro) => {
-      const r = indexedDB.open('pergaminho', 1);
+      const r = indexedDB.open('pergaminho', 2);
       r.onupgradeneeded = () => {
         const d = r.result;
         ['secoes', 'paginas'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
         if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta');
+        if (!d.objectStoreNames.contains('imagens')) d.createObjectStore('imagens', { keyPath: 'id' });
       };
       r.onsuccess = () => ok(r.result);
       r.onerror = () => erro(r.error);
@@ -267,7 +269,8 @@ const IDB = (() => {
     varios: (s, l) => tx(s, 'readwrite', st => { l.forEach(o => st.put(o)); }),
     meta: k => tx('meta', 'readonly', st => st.get(k)),
     metaPor: (k, v) => tx('meta', 'readwrite', st => st.put(v, k)),
-    zerar: () => Promise.all(['secoes', 'paginas', 'meta'].map(s => tx(s, 'readwrite', st => st.clear())))
+    pegar: (s, k) => tx(s, 'readonly', st => st.get(k)),
+    zerar: () => Promise.all(['secoes', 'paginas', 'meta', 'imagens'].map(s => tx(s, 'readwrite', st => st.clear())))
   };
 })();
 
@@ -379,6 +382,20 @@ function modelo(ctx, pag, W, H, v, secaoCor){
     for (let y = .075; y < .952; y += .0262) linha(.05, y, .95);
     rodape();
   }
+  else if (m === 'imagem'){
+    const f = (pag && pag.fundo) || {}, r = encaixe(f);
+    const im = imagemPronta(f.img);
+    if (im){
+      ctx.drawImage(im, X(r.x), Y(r.y), L(r.w), A(r.h));
+      ctx.strokeStyle = '#E3E3E3'; ctx.lineWidth = Math.max(1, L(.001)); ctx.strokeRect(X(r.x), Y(r.y), L(r.w), A(r.h));
+    } else {
+      ret(r.x, r.y, r.w, r.h, .004, '#F3F1EC');
+      texto(f.img ? 'carregando a página…' : 'sem imagem', r.x + r.w / 2, r.y + r.h / 2, .016, { cor: '#B5AE9E', al: 'center' });
+      if (f.img) carregarImagem(f.img).then(i => { if (i) aoChegarImagem(f.img); });
+    }
+    if (r.y + r.h < .62) for (let y = r.y + r.h + .05; y < .952; y += .0262) linha(.05, y, .95);   // slide deitado: pauta embaixo para anotar
+    rodape();
+  }
   else if (m === 'materia'){
     texto('Matéria', .055, .062, .036, { cor: '#4F4F4F', peso: 600 });
     const rot = (t, x, y) => texto(t, x, y, .0115, { cor: '#8C8C8C', esp: .0012 });
@@ -449,10 +466,226 @@ function desenharMini(canvas, pag){
   const s = secaoDe(pag);
   modelo(ctx, pag, W, H, v, (s && s.cor) || pag._cor);
   (pag.tinta || []).forEach(t => desenharTraco(ctx, t, W, H, v));
+  desenharTextos(ctx, pag, W, H);
+}
+function desenharTextos(ctx, pag, W, H){
   (pag.textos || []).forEach(t => {
     if (!t.t) return;
-    ctx.fillStyle = t.c || '#14213F'; ctx.font = `${t.s * W}px -apple-system, sans-serif`; ctx.textBaseline = 'top';
-    t.t.split('\n').slice(0, 30).forEach((ln, i) => ctx.fillText(ln, t.x * W, t.y * H + i * t.s * W * 1.32, t.w * W));
+    const tam = t.s * W, max = t.w * W; let y = t.y * H;
+    ctx.save(); ctx.fillStyle = t.c || '#14213F'; ctx.font = `${tam}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`; ctx.textBaseline = 'top';
+    t.t.split('\n').forEach(par => {
+      let lin = '';
+      par.split(' ').forEach(p => {
+        const tent = lin ? lin + ' ' + p : p;
+        if (ctx.measureText(tent).width > max && lin){ ctx.fillText(lin, t.x * W, y); y += tam * 1.32; lin = p; } else lin = tent;
+      });
+      ctx.fillText(lin, t.x * W, y); y += tam * 1.32;
+    });
+    ctx.restore();
+  });
+}
+
+/* =====================================================================
+   IMAGENS DE FUNDO (páginas de PDF e fotos)
+   Ficam no aparelho (IndexedDB) e na nuvem (Storage do Supabase, pasta do usuário).
+   ===================================================================== */
+const BUCKET = 'pergaminho';
+const IMG = new Map();             // id -> { im, prom }
+const imagemPronta = id => (id && IMG.get(id) && IMG.get(id).im) || null;
+function blobParaImagem(blob){
+  return new Promise(ok => { const u = URL.createObjectURL(blob), im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = u; });
+}
+function carregarImagem(id){
+  if (!id) return Promise.resolve(null);
+  const c = IMG.get(id); if (c) return c.prom;
+  const prom = (async () => {
+    let reg = await IDB.pegar('imagens', id);
+    if (!reg && sb && uid && navigator.onLine){
+      try {
+        const { data, error } = await sb.storage.from(BUCKET).download(`${uid}/${id}.jpg`);
+        if (!error && data){ reg = { id, blob: data, subiu: true }; IDB.por('imagens', reg); }
+      } catch {}
+    }
+    if (!reg){ IMG.delete(id); return null; }            // tenta de novo mais tarde
+    const im = await blobParaImagem(reg.blob);
+    IMG.set(id, { im, prom }); return im;
+  })();
+  IMG.set(id, { im: null, prom });
+  return prom;
+}
+function aoChegarImagem(id){
+  if (P && P.fundo && P.fundo.img === id) desenharFundo();
+  $$('#veu canvas[data-pid]').forEach(cv => { const p = D.paginas.get(cv.dataset.pid); if (p && p.fundo && p.fundo.img === id) desenharMini(cv, p); });
+}
+/* onde a imagem fica dentro da página 3:4 (sem distorcer) */
+function encaixe(f){
+  const fw = f.w || 3, fh = f.h || 4, mg = .03;
+  let w = 1 - 2 * mg, h = w * (fh / fw) / ASP;
+  if (h > 1 - 2 * mg){ h = 1 - 2 * mg; w = h * ASP * (fw / fh); }
+  const deitado = fw > fh;
+  return { x: (1 - w) / 2, y: deitado ? mg + .01 : (1 - h) / 2, w, h };
+}
+/* fila de imagens que ainda não subiram para a nuvem */
+const imgPend = () => lerLS('pg.imgPend', []);
+function marcarImgPend(id, sim){ const l = new Set(imgPend()); if (sim) l.add(id); else l.delete(id); gravarLS('pg.imgPend', [...l]); }
+async function subirImagens(){
+  for (const id of imgPend()){
+    const reg = await IDB.pegar('imagens', id);
+    if (!reg){ marcarImgPend(id, false); continue; }
+    const { error } = await sb.storage.from(BUCKET).upload(`${uid}/${id}.jpg`, reg.blob, { upsert: true, contentType: 'image/jpeg' });
+    if (error) throw Object.assign(new Error(error.message || 'falha ao enviar imagem'), { code: 'STORAGE', details: error.error || '' });
+    reg.subiu = true; IDB.por('imagens', reg); marcarImgPend(id, false);
+  }
+}
+/* baixa em segundo plano as imagens que este aparelho ainda não tem (para ver sem internet) */
+let baixando = false;
+async function baixarFaltantes(){
+  if (baixando || !sb || !uid || !navigator.onLine) return;
+  baixando = true;
+  try {
+    for (const p of D.paginas.values()){
+      if (p.apagado || !p.fundo || !p.fundo.img || imagemPronta(p.fundo.img)) continue;
+      const im = await carregarImagem(p.fundo.img); if (im) aoChegarImagem(p.fundo.img);
+    }
+  } finally { baixando = false; }
+}
+
+/* ---------- importar PDF ou imagem como páginas ---------- */
+let pdfjsProm = null;
+function pdfjs(){
+  if (!pdfjsProm) pdfjsProm = import('./pdf.min.mjs').then(m => { m.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs'; return m; });
+  return pdfjsProm;
+}
+const LARG_IMG = 1600;            // largura das imagens guardadas (nítido no iPad de 13")
+function canvasParaJpeg(cv){ return new Promise(ok => cv.toBlob(b => ok(b), 'image/jpeg', .84)); }
+async function guardarImagem(blob, w, h){
+  const id = novoId();
+  await IDB.por('imagens', { id, blob, subiu: false });
+  marcarImgPend(id, true);
+  const im = await blobParaImagem(blob);
+  IMG.set(id, { im, prom: Promise.resolve(im) });
+  return { img: id, w, h };
+}
+function escolherArquivo(){
+  return new Promise(ok => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'application/pdf,image/*'; i.className = 'oculto';
+    i.onchange = () => { ok(i.files[0] || null); i.remove(); };
+    document.body.appendChild(i); i.click();
+  });
+}
+async function importarArquivo(){
+  const arq = await escolherArquivo(); if (!arq) return;
+  const nome = arq.name.replace(/\.[^.]+$/, '').slice(0, 40);
+  painel(cab('Importar “' + esc(nome) + '”') + `<p>Onde colocar as páginas?</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      ${P ? `<button class="botao" data-onde="aqui">Nesta aba (${esc((secaoDe(P) || {}).nome || '')}), depois da página atual</button>` : ''}
+      <button class="botao forte" data-onde="nova">Numa aba nova chamada “${esc(nome)}”</button></div>`, c => {
+    c.addEventListener('click', e => { const b = e.target.closest('[data-onde]'); if (b){ fecharPainel(); processarArquivo(arq, nome, b.dataset.onde); } });
+  });
+}
+async function processarArquivo(arq, nome, onde){
+  gravarTintaAgora();
+  let sid, depois;
+  if (onde === 'aqui' && P){ sid = P.secao_id; depois = P.id; }
+  else {
+    const secs = secoesOrd();
+    const s = { id: novoId(), nome, cor: PASTEIS[secs.length % 6], ordem: secs.length ? secs[secs.length - 1].ordem + 1 : 1, apagado: false };
+    tocar('secoes', s); sid = s.id; depois = null;
+  }
+  const lista = paginasDe(sid);
+  let idx = depois ? lista.findIndex(p => p.id === depois) : lista.length - 1;
+  let ordem0 = idx >= 0 ? lista[idx].ordem : 0, ordemFim = lista[idx + 1] ? lista[idx + 1].ordem : ordem0 + 1e6;
+  const criadas = [];
+  const criar = async fundo => {
+    const passo = (ordemFim - ordem0) / 1e4;   // cabe muitas páginas entre a atual e a próxima
+    ordem0 += passo;
+    const pg = { id: novoId(), secao_id: sid, ordem: ordem0, modelo: 'imagem', fundo, tinta: [], textos: [], marcas: {}, apagado: false };
+    tocar('paginas', pg); criadas.push(pg);
+  };
+  try {
+    if (/pdf$/i.test(arq.type) || /\.pdf$/i.test(arq.name)){
+      aviso('Abrindo o PDF…', 0);
+      const lib = await pdfjs();
+      const doc = await lib.getDocument({ data: await arq.arrayBuffer() }).promise;
+      for (let n = 1; n <= doc.numPages; n++){
+        aviso(`Importando página ${n} de ${doc.numPages}…`, 0);
+        const pagina = await doc.getPage(n), v1 = pagina.getViewport({ scale: 1 });
+        const vp = pagina.getViewport({ scale: LARG_IMG / v1.width });
+        const cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+        const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+        await pagina.render({ canvasContext: ctx, viewport: vp }).promise;
+        await criar(await guardarImagem(await canvasParaJpeg(cv), cv.width, cv.height));
+        cv.width = cv.height = 0; pagina.cleanup();
+      }
+      doc.destroy();
+    } else {
+      aviso('Importando a imagem…', 0);
+      const im = await blobParaImagem(arq); if (!im) throw new Error('não consegui abrir a imagem');
+      const esc_ = Math.min(1, LARG_IMG / im.naturalWidth);
+      const cv = document.createElement('canvas'); cv.width = Math.round(im.naturalWidth * esc_); cv.height = Math.round(im.naturalHeight * esc_);
+      const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(im, 0, 0, cv.width, cv.height);
+      await criar(await guardarImagem(await canvasParaJpeg(cv), cv.width, cv.height));
+    }
+    aviso(`${criadas.length} ${criadas.length === 1 ? 'página importada' : 'páginas importadas'} ✓`);
+    if (criadas.length) abrir(criadas[0].id);
+    agendarEnvio();
+  } catch (e) {
+    aviso('Não consegui importar: ' + (e.message || e), 7000);
+    if (criadas.length) abrir(criadas[0].id); else desenharTudo();
+  }
+}
+
+/* =====================================================================
+   EXPORTAR EM PDF
+   ===================================================================== */
+async function renderizarPagina(pag, W){
+  const H = Math.round(W * ASP), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'), v = { z: 1, L: 0, T: 0 };
+  if (pag.fundo && pag.fundo.img) await carregarImagem(pag.fundo.img);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  const s = secaoDe(pag);
+  modelo(ctx, pag, W, H, v, s && s.cor);
+  (pag.tinta || []).forEach(t => desenharTraco(ctx, t, W, H, v));
+  desenharTextos(ctx, pag, W, H);
+  return cv;
+}
+async function exportarPDF(qual){
+  gravarTintaAgora(); fecharPainel();
+  if (!window.jspdf){ aviso('O gerador de PDF ainda não carregou. Abra o app uma vez com internet.', 6000); return; }
+  let paginas = [], nome = 'caderno';
+  if (qual === 'pagina' && P){ paginas = [P]; const s = secaoDe(P); nome = ((s && s.nome) || 'pagina') + '-pagina-' + (paginasDe(P.secao_id).findIndex(p => p.id === P.id) + 1); }
+  else if (qual === 'aba'){ const sid = P ? P.secao_id : (secoesOrd()[0] || {}).id; paginas = paginasDe(sid); nome = ((D.secoes.get(sid) || {}).nome) || 'aba'; }
+  else { paginas = secoesOrd().flatMap(s => paginasDe(s.id)); nome = 'Pergaminho-caderno'; }
+  if (!paginas.length){ aviso('Nada para exportar aqui.'); return; }
+  const { jsPDF } = window.jspdf, PW = 595.28, PH = PW * ASP;
+  const doc = new jsPDF({ unit: 'pt', format: [PW, PH], compress: true });
+  for (let i = 0; i < paginas.length; i++){
+    aviso(`Gerando PDF: página ${i + 1} de ${paginas.length}…`, 0);
+    const cv = await renderizarPagina(paginas[i], 1400);
+    if (i) doc.addPage([PW, PH]);
+    doc.addImage(cv.toDataURL('image/jpeg', .85), 'JPEG', 0, 0, PW, PH, undefined, 'FAST');
+    cv.width = cv.height = 0;
+    await new Promise(r => setTimeout(r, 0));
+  }
+  const arquivo = nome.replace(/[^\p{L}\p{N} _-]/gu, '').trim().replace(/\s+/g, '-') + '.pdf';
+  const blob = doc.output('blob');
+  $('#aviso').classList.remove('vis');
+  try {
+    const f = new File([blob], arquivo, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })){ await navigator.share({ files: [f], title: arquivo }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = arquivo;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+  aviso('PDF gerado: ' + arquivo);
+}
+function painelExportar(){
+  const s = P ? secaoDe(P) : secoesOrd()[0];
+  painel(cab('Exportar em PDF') + `<p>No iPad abre a folha de compartilhar: salvar em Arquivos, mandar pelo WhatsApp, imprimir…</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      ${P ? '<button class="botao" data-q="pagina">Só esta página</button>' : ''}
+      ${s ? `<button class="botao" data-q="aba">A aba inteira: ${esc(s.nome)} (${paginasDe(s.id).length} págs.)</button>` : ''}
+      <button class="botao forte" data-q="tudo">O caderno inteiro (${secoesOrd().reduce((n, x) => n + paginasDe(x.id).length, 0)} págs.)</button></div>`, c => {
+    c.addEventListener('click', e => { const b = e.target.closest('[data-q]'); if (b) exportarPDF(b.dataset.q); });
   });
 }
 
@@ -881,7 +1114,9 @@ function painelNovaPagina(){
   const ordem = ['pautada', 'materia', 'branco', 'divisoria'];
   const sec = P ? secaoDe(P) : D.secoes.get(lerLS('pg.ultSec', '')) || secoesOrd()[0];
   painel(cab('Nova página') + `<p>Entra logo depois da página atual${sec ? `, na aba <b>${esc(sec.nome)}</b>` : ''}.</p><h3>Escolha o modelo</h3>
-    <div class="modelos">${ordem.map(m => `<button class="modelo${m === est.ultModelo ? ' on' : ''}" data-m="${m}"><canvas></canvas>${MODELOS[m]}</button>`).join('')}</div>`, c => {
+    <div class="modelos">${ordem.map(m => `<button class="modelo${m === est.ultModelo ? ' on' : ''}" data-m="${m}"><canvas></canvas>${MODELOS[m]}</button>`).join('')}</div>
+    <h3>Ou traga de fora</h3><button class="botao forte" id="npImp">📄 Importar PDF ou imagem para anotar</button>`, c => {
+    $('#npImp', c).onclick = () => { fecharPainel(); importarArquivo(); };
     $$('.modelo', c).forEach(b => {
       requestAnimationFrame(() => desenharMini(b.querySelector('canvas'), { modelo: b.dataset.m, secao_id: sec && sec.id, marcas: {}, _cor: (sec && sec.cor) || PASTEIS[0] }));
       b.onclick = () => { fecharPainel(); novaPagina(b.dataset.m); };
@@ -933,17 +1168,18 @@ function painelPaginas(){
   if (!P) return painelAbas();
   const s = secaoDe(P), sid = P.secao_id;
   painel(cab(esc((s && s.nome) || 'Aba')) + `<p>Toque numa página para abrir. Use as setas para mudar a ordem.</p>
-    <div style="display:flex;gap:10px;margin:12px 0 4px"><button class="botao" id="ppAba">Editar aba</button><button class="botao" id="ppNova">+ Nova página</button></div>
+    <div style="display:flex;gap:10px;margin:12px 0 4px"><button class="botao" id="ppAba">Editar aba</button><button class="botao" id="ppNova">+ Nova página</button><button class="botao" id="ppPdf">Exportar PDF</button></div>
     <h3>Páginas</h3><div class="minis" id="ppMinis"></div>`, c => {
     const montar = () => {
       const lista = paginasDe(sid);
-      $('#ppMinis', c).innerHTML = lista.map((p, i) => `<div class="mini${p.id === atualId ? ' atual' : ''}" data-id="${p.id}"><canvas></canvas><small>${i + 1} · ${MODELOS[p.modelo] || ''}</small>
+      $('#ppMinis', c).innerHTML = lista.map((p, i) => `<div class="mini${p.id === atualId ? ' atual' : ''}" data-id="${p.id}"><canvas data-pid="${p.id}"></canvas><small>${i + 1} · ${MODELOS[p.modelo] || ''}</small>
         <div class="acoes"><button data-a="sobe" title="Mover para trás">↑</button><button data-a="desce" title="Mover para frente">↓</button><button data-a="dup" title="Duplicar">⧉</button><button data-a="apaga" title="Apagar">🗑</button></div></div>`).join('');
       $$('.mini', c).forEach(m => requestAnimationFrame(() => desenharMini(m.querySelector('canvas'), D.paginas.get(m.dataset.id))));
     };
     montar();
     $('#ppAba', c).onclick = () => painelAba(sid);
     $('#ppNova', c).onclick = painelNovaPagina;
+    $('#ppPdf', c).onclick = painelExportar;
     let armada = null;
     $('#ppMinis', c).onclick = e => {
       const m = e.target.closest('.mini'); if (!m) return;
@@ -971,7 +1207,8 @@ function painelPaginas(){
 
 function painelAbas(){
   painel(cab('Abas') + `<p>Mude a ordem, o nome ou a cor das abas.</p><div id="abLista" style="margin-top:8px"></div>
-    <div style="margin-top:14px"><button class="botao forte" id="abNova">+ Nova aba</button></div>`, c => {
+    <div style="margin-top:14px"><button class="botao forte" id="abNova">+ Nova aba</button> <button class="botao" id="abPdf">Exportar PDF</button></div>`, c => {
+    $('#abPdf', c).onclick = painelExportar;
     const montar = () => {
       $('#abLista', c).innerHTML = secoesOrd().map(s => `<div class="abaLinha" data-id="${s.id}"><i style="background:${s.cor}"></i><span>${esc(s.nome)}</span>
         <button data-a="sobe">↑</button><button data-a="desce">↓</button><button data-a="editar">Editar</button></div>`).join('') || '<p>Nenhuma aba ainda.</p>';
@@ -1005,7 +1242,8 @@ function painelAjustes(){
     <div class="linha"><span>${uid ? 'Conta: ' + esc(lerLS('pg.email', '')) : 'Sem login'}<br><small style="color:var(--sub)">${ult ? 'Última sincronização: ' + new Date(ult).toLocaleString('pt-BR') : 'Ainda não sincronizou'}</small></span><button class="botao" id="ajSync">Sincronizar agora</button></div>
     <div class="linha"><span><b>Diagnóstico</b><br><small style="color:var(--sub)" id="ajDiag">Consultando…</small></span></div>
     <h3>Cópia de segurança</h3>
-    <div class="linha"><span>Baixar tudo num arquivo</span><button class="botao" id="ajExp">Exportar</button></div>
+    <div class="linha"><span>Caderno em PDF (para ler, imprimir, enviar)</span><button class="botao" id="ajPdf">Exportar PDF</button></div>
+    <div class="linha"><span>Cópia completa (para restaurar no app)</span><button class="botao" id="ajExp">Exportar</button></div>
     <div class="linha"><span>Trazer de um arquivo</span><button class="botao" id="ajImp">Importar</button><input type="file" id="ajArq" accept=".json,application/json" class="oculto"></div>
     <h3>App</h3>
     <div class="linha"><span>Pergaminho · <b>v${VERSAO}</b></span><button class="botao" id="ajVer">Verificar atualização</button></div>
@@ -1016,6 +1254,7 @@ function painelAjustes(){
     $('#ajDedo', c).onclick = () => { est.dedo = !est.dedo; guardarEst(); pintarFerramentas(); painelAjustes(); };
     $('#ajSync', c).onclick = async () => { await sincronizar(true); painelAjustes(); };
     $('#ajExp', c).onclick = exportar;
+    $('#ajPdf', c).onclick = painelExportar;
     $('#ajImp', c).onclick = () => $('#ajArq', c).click();
     $('#ajArq', c).onchange = e => importar(e.target.files[0]);
     $('#ajVer', c).onclick = () => verificarVersao(true);
@@ -1040,7 +1279,7 @@ async function diagnostico(){
   }
   return esc(aqui) + '<br>' + nuvem + (ultimoErro ? '<br><span style="color:#C0392B">Último erro: ' + esc(ultimoErro) + '</span>' : '');
 }
-function limpo(tipo, o){ const r = {}; CAMPOS[tipo].forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; }
+function limpo(tipo, o){ const r = {}; CAMPOS[tipo].forEach(k => { if (o[k] !== undefined && !(k === 'fundo' && o[k] === null)) r[k] = o[k]; }); return r; }
 function exportar(){
   gravarTintaAgora();
   const pacote = { app: 'Pergaminho', versao: VERSAO, exportado_em: agora(),
@@ -1086,7 +1325,7 @@ async function atualizarApp(){
 /* =====================================================================
    LOGIN E SINCRONIZAÇÃO COM O SUPABASE
    ===================================================================== */
-let ultimoErro = '', sb = null, uid = lerLS('pg.uid', null), sincronizando = false, deNovo = false, tEnvio = null, estadoSync = 'off', avisouSQL = false;
+let avisouSQL2 = false, ultimoErro = '', sb = null, uid = lerLS('pg.uid', null), sincronizando = false, deNovo = false, tEnvio = null, estadoSync = 'off', avisouSQL = false;
 
 function mostrarLogin(msg){
   if ($('#login')){ if (msg) $('#loginErro').textContent = msg; return; }
@@ -1149,7 +1388,12 @@ async function sincronizar(manual){
   sincronizando = true;
   try {
     gravarTintaAgora();
-    await enviar(); await receber();
+    let falha = null;
+    try { await subirImagens(); } catch (e) { falha = e; }
+    try { await enviar(); } catch (e) { falha = falha || e; }
+    await receber();
+    baixarFaltantes();
+    if (falha) throw falha;
     estadoSync = 'ok'; ultimoErro = ''; gravarLS('pg.ultSync', agora());
     if (manual) aviso('Sincronizado ✓');
   } catch (e) {
@@ -1157,7 +1401,9 @@ async function sincronizar(manual){
     const m = (e && (e.message || e.code)) || String(e);
     ultimoErro = `${new Date().toLocaleTimeString('pt-BR')} · ${(e && e.code) ? e.code + ' · ' : ''}${m}${e && e.details ? ' · ' + e.details : ''}${e && e.hint ? ' · ' + e.hint : ''}`;
     console.error('[Pergaminho] sincronização:', e);
-    if (/PGRST205|42P01|does not exist|schema cache/i.test(m + ' ' + (e && e.code))){
+    if (/fundo|Bucket not found|bucket|row-level security.*objects|STORAGE/i.test(m + ' ' + (e && e.code) + ' ' + (e && e.details))){
+      if (!avisouSQL2 || manual){ avisouSQL2 = true; aviso('Para sincronizar as páginas de PDF, rode no Supabase o arquivo caderno-etapa2.sql. As demais páginas continuam sincronizando.', 10000); }
+    } else if (/PGRST205|42P01|does not exist|schema cache/i.test(m + ' ' + (e && e.code))){
       if (!avisouSQL || manual){ avisouSQL = true; aviso('Falta rodar no Supabase o arquivo caderno.sql (tabelas do Pergaminho). Até lá, tudo fica guardado no iPad.', 9000); }
     } else if (/JWT|token|401|403/i.test(m)){ mostrarLogin('Entre de novo para sincronizar.'); }
     else aviso('Não consegui sincronizar: ' + m, manual ? 9000 : 5000);
@@ -1168,19 +1414,26 @@ async function sincronizar(manual){
 }
 
 async function enviar(){
+  let erro = null;
   for (const tipo of ['secoes', 'paginas']){
     const pend = [...D[tipo].values()].filter(o => o._p);
     for (let i = 0; i < pend.length; i += 15){
       const lote = pend.slice(i, i + 15);
       const linhas = lote.map(o => ({ ...limpo(tipo, o), user_id: uid }));
-      const { error } = await sb.from(TABELA[tipo]).upsert(linhas);
-      if (error) throw error;
+      // linhas com colunas diferentes (ex.: com e sem "fundo") vão em envios separados
+      const grupos = {};
+      linhas.forEach(l => (grupos[Object.keys(l).sort().join()] ||= []).push(l));
+      for (const g of Object.values(grupos).sort((a, b) => ('fundo' in a[0]) - ('fundo' in b[0]))){
+        const { error } = await sb.from(TABELA[tipo]).upsert(g);
+        if (error){ erro = erro || error; g.forEach(l => { l._falhou = 1; }); }
+      }
       lote.forEach((o, k) => {
         const m = D[tipo].get(o.id);
-        if (m && m.atualizado_em === linhas[k].atualizado_em){ delete m._p; IDB.por(tipo, m); }
+        if (!linhas[k]._falhou && m && m.atualizado_em === linhas[k].atualizado_em){ delete m._p; IDB.por(tipo, m); }
       });
     }
   }
+  if (erro) throw erro;
 }
 
 async function receber(){

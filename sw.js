@@ -1,8 +1,8 @@
-// Pergaminho — service worker v1.0.2
+// Pergaminho — service worker v1.1.0
 // Arquivos do app: rede primeiro (as atualizações do GitHub aparecem logo); sem internet, usa o que está guardado.
 // Fontes do Google: guardadas na primeira vez.
-const CACHE = 'pergaminho-1.0.2';
-const BASICOS = ['./', 'index.html', 'supabase.min.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'pergaminho-1.1.0';
+const BASICOS = ['./', 'index.html', 'supabase.min.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'jspdf.umd.min.js', 'pdf.min.mjs', 'pdf.worker.min.mjs'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(BASICOS)).catch(() => {}).then(() => self.skipWaiting()));
 });
