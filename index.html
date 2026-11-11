@@ -74,6 +74,17 @@ button{font:inherit;color:inherit;cursor:pointer}
 .modo-figura .figw{display:block}
 .figApagar{position:absolute;right:-14px;top:-14px;width:28px;height:28px;border-radius:50%;background:#C0392B;color:#fff;font-size:20px;line-height:27px;text-align:center;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.25)}
 .figTam{position:absolute;right:-12px;bottom:-12px;width:26px;height:26px;border-radius:7px;background:var(--ouro);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:nwse-resize}
+.amostra{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.55)}
+.amostra i{display:block;border-radius:50%;background:rgba(255,255,255,.9)}
+#menuEstilo{position:fixed;z-index:60;background:var(--painel);color:var(--tx);border:1px solid var(--borda);border-radius:16px;box-shadow:var(--sombra);padding:12px 14px 14px;width:284px}
+#menuEstilo h4{margin:2px 0 8px;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--sub)}
+#menuEstilo .mcores{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:14px}
+#menuEstilo .mcores button{width:30px;height:30px;border-radius:50%;border:3px solid transparent;padding:0}
+#menuEstilo .mcores button.on{border-color:var(--painel);box-shadow:0 0 0 2px var(--ouro)}
+#menuEstilo .mgr{display:flex;flex-direction:column;gap:4px}
+#menuEstilo .mgr button{display:flex;align-items:center;gap:14px;border:none;background:transparent;border-radius:9px;padding:9px 10px;color:var(--tx);font-size:14px}
+#menuEstilo .mgr button i{display:block;width:70px;border-radius:4px;background:currentColor}
+#menuEstilo .mgr button.on{background:var(--ouro);color:var(--azul)}
 #menuFormas{position:fixed;z-index:60;background:var(--painel);color:var(--tx);border:1px solid var(--borda);border-radius:14px;box-shadow:var(--sombra);padding:6px;display:flex;flex-direction:column;min-width:190px}
 #menuFormas button{display:flex;align-items:center;gap:12px;border:none;background:transparent;border-radius:9px;padding:9px 10px;font-size:15px;color:var(--tx);text-align:left}
 #menuFormas button svg{width:22px;height:22px}
@@ -200,7 +211,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.3.0';
+const VERSAO = '1.3.1';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -856,11 +867,7 @@ function montarFerramentas(){
     <button class="bt" data-ferr="forma" id="bForma" title="Formas geométricas">${I.formas}</button>
     <button class="bt" data-ferr="figura" title="Inserir e ajustar imagens (JPG/PNG)">${I.imagem}</button>
     <span class="sep"></span>
-    ${Object.entries(CORES).map(([k, v]) => `<button class="cor" data-cor="${k}" title="${k}" style="background:${v}"></button>`).join('')}
-    <span class="sep"></span>
-    <button class="bt gr" data-gr="fino" title="Fino"><i style="width:4px;height:4px"></i></button>
-    <button class="bt gr" data-gr="medio" title="Médio"><i style="width:7px;height:7px"></i></button>
-    <button class="bt gr" data-gr="grosso" title="Grosso"><i style="width:11px;height:11px"></i></button>
+    <button class="bt" id="bEstilo" title="Cor e espessura"><span class="amostra"><i></i></span><span class="rot">Cor</span></button>
     <span class="sep"></span>
     <button class="bt" data-acao="zmenos" title="Diminuir o zoom">${I.zmenos}</button>
     <button class="bt" data-acao="zmais" title="Aumentar o zoom">${I.zmais}</button>
@@ -872,6 +879,7 @@ function montarFerramentas(){
     <button class="bt" data-acao="limpar" title="Limpar toda a tinta desta página (a página continua)">${I.limpar}</button>
     <button class="bt" data-acao="dedo" title="Escrever também com o dedo">${I.dedo}</button>`;
   b2.addEventListener('click', e => {
+    if (e.target.closest('#bEstilo')){ $('#menuEstilo') ? fecharMenuEstilo() : abrirMenuEstilo(); return; }
     const f = e.target.closest('[data-ferr]'), c = e.target.closest('[data-cor]'), g = e.target.closest('[data-gr]'), a = e.target.closest('[data-acao]');
     if (f){
       const antes = est.ferr; est.ferr = f.dataset.ferr; guardarEst(); pintarFerramentas();
@@ -898,8 +906,10 @@ function montarFerramentas(){
 }
 function pintarFerramentas(){
   $$('#ferramentas [data-ferr]').forEach(b => b.classList.toggle('on', b.dataset.ferr === est.ferr));
-  $$('#ferramentas [data-cor]').forEach(b => b.classList.toggle('on', b.dataset.cor === est.cor));
-  $$('#ferramentas [data-gr]').forEach(b => b.classList.toggle('on', b.dataset.gr === est.gr));
+  $$('#menuEstilo [data-cor]').forEach(b => b.classList.toggle('on', b.dataset.cor === est.cor));
+  $$('#menuEstilo [data-gr]').forEach(b => b.classList.toggle('on', b.dataset.gr === est.gr));
+  const am = $('#bEstilo .amostra');
+  if (am){ const t = { fino: 6, medio: 10, grosso: 15 }[est.gr] || 10; am.style.background = CORES[est.cor] || CORES.marinho; am.querySelector('i').style.cssText = `width:${t}px;height:${t}px`; }
   const d = $('#ferramentas [data-acao="dedo"]'); if (d) d.classList.toggle('on', est.dedo);
   const texto = est.ferr === 'texto';
   cx.palco.classList.toggle('modo-texto', texto);
@@ -977,8 +987,29 @@ function gerarForma(k, a, b){
   }
   return pts;
 }
+/* cor e espessura num menu que abre embaixo do botão (não precisa rolar a barra no iPad) */
+const NOMES_COR = { grafite: 'Grafite', marinho: 'Azul-marinho', azul: 'Azul', vermelho: 'Vermelho', verde: 'Verde', rosa: 'Rosa', amarelo: 'Amarelo' };
+function abrirMenuEstilo(){
+  fecharMenuEstilo(); fecharMenuFormas();
+  const bt = $('#bEstilo'), r = bt.getBoundingClientRect(), m = document.createElement('div');
+  m.id = 'menuEstilo';
+  m.innerHTML = `<h4>Cor</h4><div class="mcores">${Object.entries(CORES).map(([k, v]) => `<button data-cor="${k}" title="${NOMES_COR[k] || k}" style="background:${v}"></button>`).join('')}</div>
+    <h4>Espessura</h4><div class="mgr">${[['fino', 'Fina', 2], ['medio', 'Média', 4], ['grosso', 'Grossa', 7]].map(([k, n, h]) => `<button data-gr="${k}"><i style="height:${h}px"></i><span>${n}</span></button>`).join('')}</div>`;
+  Object.assign(m.style, { left: Math.max(8, Math.min(r.left - 20, innerWidth - 300)) + 'px', top: (r.bottom + 6) + 'px' });
+  m.onclick = e => {
+    const c = e.target.closest('[data-cor]'), g = e.target.closest('[data-gr]');
+    if (c){ est.cor = c.dataset.cor; if (['borracha', 'mao', 'figura'].includes(est.ferr)) est.ferr = 'caneta'; }
+    if (g){ est.gr = g.dataset.gr; }
+    if (c || g){ guardarEst(); pintarFerramentas(); aplicarCorNoTexto(); if (c) setTimeout(fecharMenuEstilo, 180); }
+  };
+  document.body.appendChild(m); pintarFerramentas();
+  setTimeout(() => document.addEventListener('pointerdown', fecharForaEstilo, true), 0);
+}
+function fecharForaEstilo(e){ if (!e.target.closest('#menuEstilo, #bEstilo')) fecharMenuEstilo(); }
+function fecharMenuEstilo(){ const m = $('#menuEstilo'); if (m) m.remove(); document.removeEventListener('pointerdown', fecharForaEstilo, true); }
+
 function abrirMenuFormas(bt){
-  fecharMenuFormas();
+  fecharMenuFormas(); fecharMenuEstilo();
   const r = bt.getBoundingClientRect(), m = document.createElement('div');
   m.id = 'menuFormas';
   m.innerHTML = [['lin', 'Linha'], ['seta', 'Seta'], ['ret', 'Retângulo'], ['eli', 'Círculo / elipse'], ['tri', 'Triângulo']]
