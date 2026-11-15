@@ -211,7 +211,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.3.1';
+const VERSAO = '1.4.0';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -1586,7 +1586,20 @@ function painelAjustes(){
     <h3>App</h3>
     <div class="linha"><span>Pergaminho · <b>v${VERSAO}</b></span><button class="botao" id="ajVer">Verificar atualização</button></div>
     <div class="linha"><span>Recarregar a versão mais nova</span><button class="botao forte" id="ajAtu">🔄 Atualizar app</button></div>
-    <div class="linha"><span>Sair da conta</span><button class="botao perigo" id="ajSair">Sair</button></div>`, c => {
+    <div class="linha"><span>Algo sumiu? Trazer tudo da nuvem</span><button class="botao" id="ajBaixar">Baixar tudo de novo</button></div>
+    <div class="linha"><span>Sair da conta</span><button class="botao perigo" id="ajSair">Sair</button></div>
+    ${ehAdmin() ? `<h3>Contas da família</h3>
+      <p>Cada pessoa entra com o próprio e-mail e senha e tem a sua própria estante. Ninguém vê o caderno do outro.</p>
+      <div id="famLista" style="margin:8px 0 4px">${(lerLS('pg.familia', []) || []).map(f => `<div class="linha"><span>${esc(f.nome)}<br><small style="color:var(--sub)">${esc(f.email)} · criada em ${new Date(f.em).toLocaleDateString('pt-BR')}</small></span></div>`).join('')}</div>
+      <div style="display:grid;gap:8px;margin-top:6px">
+        <input class="campo" id="famNome" placeholder="Nome (ex.: Ana)" maxlength="40">
+        <input class="campo" id="famEmail" type="email" inputmode="email" autocomplete="off" placeholder="E-mail dela">
+        <input class="campo" id="famSenha" type="text" autocomplete="off" placeholder="Senha (mínimo 6 caracteres)">
+        <button class="botao forte" id="famCriar">Criar conta</button>
+        <div id="famMsg" style="font-size:13.5px;color:var(--sub)"></div>
+      </div>` : ''}`, c => {
+    $('#ajBaixar', c).onclick = baixarTudoDeNovo;
+    if ($('#famCriar', c)) $('#famCriar', c).onclick = () => criarContaFamilia(c);
     diagnostico().then(t => { const d = $('#ajDiag', c); if (d) d.innerHTML = t; });
     $('#ajTema', c).onclick = () => { gravarLS('pg.tema', lerLS('pg.tema', 'claro') === 'escuro' ? 'claro' : 'escuro'); aplicarTema(); painelAjustes(); };
     $('#ajDedo', c).onclick = () => { est.dedo = !est.dedo; guardarEst(); pintarFerramentas(); painelAjustes(); };
@@ -1684,20 +1697,66 @@ function mostrarLogin(msg){
     btn.disabled = false; btn.textContent = 'Entrar';
     if (r.error){ err.textContent = /invalid/i.test(r.error.message || '') ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar. Confira a internet.'; return; }
     try { localStorage.setItem('bispo-email', email); } catch {}
-    definirUsuario(r.data.user); d.remove();
+    await definirUsuario(r.data.user); d.remove();
     await sincronizar(); if (estadoSync === 'ok') semente();
+    garantirCadernos(); abrir(atualId); if (estanteAberta()) pintarEstante();
   });
   setTimeout(() => { const a = $($('#lgEmail').value ? '#lgSenha' : '#lgEmail'); if (a) a.focus(); }, 80);
 }
-function definirUsuario(u){
+let usuario = null;
+async function definirUsuario(u){
   if (!u) return;
+  const anterior = lerLS('pg.uid', null);
+  usuario = u;
+  if (anterior && anterior !== u.id){ await limparAparelho(); }        // outra pessoa entrou neste aparelho
   uid = u.id; gravarLS('pg.uid', uid); gravarLS('pg.email', u.email || '');
+}
+/* apaga só a cópia do aparelho (a nuvem fica intacta) e zera as marcas de "até onde já baixei" */
+async function limparAparelho(){
+  TIPOS.forEach(t => D[t].clear());
+  Object.keys(localStorage).filter(k => k.startsWith('pg.') && k !== 'pg.tema' && k !== 'pg.est').forEach(k => localStorage.removeItem(k));
+  cadernoAtual = null; atualId = 'indice';
+  await IDB.zerar();
 }
 async function sair(){
   gravarTintaAgora();
   try { await sincronizar(); } catch {}
+  const pend = [...D.secoes.values(), ...D.paginas.values(), ...D.cadernos.values()].some(o => o._p) || imgPend().length;
+  if (pend && !confirm('Há alterações que ainda não subiram para a nuvem (sem internet?). Se sair agora, elas se perdem neste aparelho. Sair mesmo assim?')) return;
   try { if (sb) await sb.auth.signOut(); } catch {}
-  localStorage.removeItem('pg.uid'); await IDB.zerar(); location.reload();
+  await limparAparelho(); location.reload();
+}
+/* quem criou as contas é o administrador; contas criadas pelo app levam "criado_por" e não veem esta parte */
+const ehAdmin = () => !!(usuario && !(usuario.user_metadata && usuario.user_metadata.criado_por));
+async function criarContaFamilia(c){
+  const nome = $('#famNome', c).value.trim(), email = $('#famEmail', c).value.trim().toLowerCase(), senha = $('#famSenha', c).value, msg = $('#famMsg', c), bt = $('#famCriar', c);
+  const dizer = (t, cor) => { msg.textContent = t; msg.style.color = cor || 'var(--sub)'; };
+  if (!nome || !/^\S+@\S+\.\S+$/.test(email)) return dizer('Preencha o nome e um e-mail válido.', '#C0392B');
+  if (senha.length < 6) return dizer('A senha precisa ter pelo menos 6 caracteres.', '#C0392B');
+  if (!navigator.onLine || !window.supabase) return dizer('Precisa de internet para criar a conta.', '#C0392B');
+  bt.disabled = true; bt.textContent = 'Criando…';
+  try {
+    // cliente separado e sem guardar sessão: assim você continua logado na sua conta
+    const sb2 = window.supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'pg-cadastro' } });
+    const { data, error } = await sb2.auth.signUp({ email, password: senha, options: { data: { nome, criado_por: uid, app: 'pergaminho' } } });
+    if (error){
+      const m = error.message || '';
+      dizer(/registered|exists/i.test(m) ? 'Esse e-mail já tem conta. Ela pode entrar com a senha que já usa.' : /not allowed|disabled/i.test(m) ? 'O cadastro de novas contas está desligado no Supabase (Authentication → Sign In / Providers → "Allow new users to sign up").' : 'Não consegui criar: ' + m, '#C0392B');
+      return;
+    }
+    if (data.user && Array.isArray(data.user.identities) && !data.user.identities.length){ dizer('Esse e-mail já tem conta. Ela pode entrar com a senha que já usa.', '#C0392B'); return; }
+    const lista = lerLS('pg.familia', []); lista.push({ nome, email, em: agora() }); gravarLS('pg.familia', lista);
+    try { await sb2.auth.signOut(); } catch {}
+    $('#famNome', c).value = $('#famEmail', c).value = $('#famSenha', c).value = '';
+    $('#famLista', c).insertAdjacentHTML('beforeend', `<div class="linha"><span>${esc(nome)}<br><small style="color:var(--sub)">${esc(email)} · criada agora</small></span></div>`);
+    dizer(data.session ? `Conta de ${nome} criada ✓ Ela já pode entrar no Pergaminho com ${email} e a senha que você definiu.`
+                       : `Conta de ${nome} criada ✓ O Supabase enviou um e-mail de confirmação para ${email}: ela precisa tocar no link uma vez e depois entrar com a senha.`, '#1E9E50');
+  } catch (e) { dizer('Não consegui criar: ' + (e.message || e), '#C0392B'); }
+  finally { bt.disabled = false; bt.textContent = 'Criar conta'; }
+}
+async function baixarTudoDeNovo(){
+  for (const t of TIPOS){ await IDB.metaPor('ult_' + t, '1970-01-01T00:00:00Z'); localStorage.removeItem('pg.ult_' + t); }
+  await sincronizar(true); garantirCadernos(); abrir(atualId); if (estanteAberta()) pintarEstante();
 }
 
 async function iniciarNuvem(){
@@ -1705,7 +1764,7 @@ async function iniciarNuvem(){
   sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { storageKey: 'bispo-auth', persistSession: true, autoRefreshToken: true } });
   let sess = null;
   try { const r = await sb.auth.getSession(); sess = r.data && r.data.session; } catch {}
-  if (sess){ definirUsuario(sess.user); await sincronizar(); if (estadoSync === 'ok') semente(); }
+  if (sess){ await definirUsuario(sess.user); await sincronizar(); if (estadoSync === 'ok') semente(); }
   else if (navigator.onLine || !uid) mostrarLogin();
   else { semente(); pintarSync(); }
   sb.auth.onAuthStateChange((ev, s) => { if (s && s.user) definirUsuario(s.user); });
@@ -1782,6 +1841,7 @@ async function receber(){
   let mudou = false, atualMudou = false, falha = null;
   for (const tipo of TIPOS){ try {
     let ult = (await IDB.meta('ult_' + tipo)) || lerLS('pg.ult_' + tipo, '1970-01-01T00:00:00Z');
+    if (!D[tipo].size) ult = '1970-01-01T00:00:00Z';
     for (let volta = 0; volta < 50; volta++){
       const { data, error } = await sb.from(TABELA[tipo]).select('*').gt('servidor_em', ult).order('servidor_em').limit(500);
       if (error) throw error;
