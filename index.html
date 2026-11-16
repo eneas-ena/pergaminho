@@ -34,7 +34,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--fundo);color:var
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 button{font:inherit;color:inherit;cursor:pointer}
 .oculto{display:none!important}
-#app{display:flex;flex-direction:column;height:100dvh}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.palco{min-height:0}
 
 /* ---------- barras ---------- */
 .barra{background:var(--barra);color:var(--barra-tx);padding-top:env(safe-area-inset-top,0px);flex:none;z-index:5}
@@ -61,7 +62,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* ---------- palco e folha ---------- */
 .palco{flex:1;position:relative;overflow:hidden;touch-action:none}
 .folha{position:absolute;background:#fff;border-radius:3px;box-shadow:0 4px 18px rgba(0,0,0,.16);overflow:hidden}
-.folha canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.folha canvas{position:absolute;top:0;left:0;right:0;bottom:0;inset:0;width:100%;height:100%;display:block}
 .camada{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none}
 .txw{position:absolute}
 .tx{white-space:pre-wrap;word-wrap:break-word;line-height:1.32;outline:none;min-height:1.32em;
@@ -95,8 +96,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .aba.ativa{width:40px;color:rgba(0,0,0,.75)}
 
 /* ---------- painéis ---------- */
-.veu{position:fixed;inset:0;background:rgba(6,12,24,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
-.cartao{background:var(--painel);color:var(--tx);width:100%;max-width:720px;max-height:86dvh;overflow:auto;border-radius:20px 20px 0 0;
+.veu{position:fixed;top:0;left:0;right:0;bottom:0;inset:0;background:rgba(6,12,24,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.cartao{background:var(--painel);color:var(--tx);width:100%;max-width:720px;max-height:86vh;max-height:86dvh;overflow:auto;border-radius:20px 20px 0 0;
   padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--sombra)}
 @media (min-width:700px){.veu{align-items:center}.cartao{border-radius:20px}}
 .cartao h2{font-family:Cinzel,Georgia,serif;font-size:18px;margin:0 0 4px;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -134,7 +135,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .abaLinha button{border:1px solid var(--borda);background:transparent;border-radius:8px;min-width:34px;height:32px;font-size:14px}
 
 /* ---------- estante ---------- */
-#estante{position:fixed;inset:0;z-index:40;background:var(--fundo);display:flex;flex-direction:column}
+#estante{position:fixed;top:0;left:0;right:0;bottom:0;inset:0;z-index:40;background:var(--fundo);display:flex;flex-direction:column}
 #estante .eb{background:var(--barra);color:var(--barra-tx);padding:calc(env(safe-area-inset-top,0px) + 8px) 14px 10px;display:flex;align-items:center;gap:8px}
 #estante .eb h1{flex:1;margin:0;font-family:Cinzel,Georgia,serif;font-size:20px;letter-spacing:.5px}
 #estante .eb small{display:block;font-family:Georgia,serif;font-style:italic;font-size:12px;color:var(--barra-sub);letter-spacing:0}
@@ -159,7 +160,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 #aviso button{background:var(--ouro);color:var(--azul);border:none;border-radius:9px;padding:7px 11px;font-weight:700;white-space:nowrap}
 
 /* ---------- login ---------- */
-#login{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(180deg,#16233F,#0B1426)}
+#login{position:fixed;top:0;left:0;right:0;bottom:0;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(180deg,#16233F,#0B1426)}
 #login form{background:#FFFDF6;color:#1B2438;border-radius:18px;padding:28px 24px;width:100%;max-width:370px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 #login h1{font-family:Cinzel,Georgia,serif;font-size:24px;text-align:center;color:#16233F;margin:0 0 2px;letter-spacing:.6px}
 #login .lema{font-family:Georgia,serif;font-style:italic;font-size:13px;text-align:center;color:#8A7A4A;margin:0 0 18px}
@@ -211,7 +212,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.4.1';
+const VERSAO = '1.4.2';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -786,7 +787,12 @@ function abrir(id){
 }
 
 function medir(){
-  const pal = cx.palco.getBoundingClientRect();
+  let pal = cx.palco.getBoundingClientRect();
+  if (pal.width && pal.height < 100){
+    const topo = $('.barra').getBoundingClientRect().bottom;
+    cx.palco.style.height = Math.max(200, window.innerHeight - topo) + 'px'; cx.palco.style.flex = 'none';
+    pal = cx.palco.getBoundingClientRect();
+  }
   if (!pal.width || !pal.height) return;
   const abaW = 44, mg = 12;
   let w = pal.width - 2 * mg - abaW, h = w * ASP;
