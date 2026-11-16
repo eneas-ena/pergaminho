@@ -211,7 +211,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    · A caneta (Apple Pencil) escreve; o dedo vira a página (deslizar), marca as caixinhas e toca nas abas.
    · Tudo fica primeiro no próprio iPad (funciona sem internet) e sobe para o Supabase quando houver conexão.
    ===================================================================== */
-const VERSAO = '1.4.0';
+const VERSAO = '1.4.1';
 const SUPA_URL = 'https://ghjbljypxksubmcsvaig.supabase.co';
 const SUPA_KEY = 'sb_publishable_qXCYqg1WdmelY9D1mptZXg_U8NdoKby';
 
@@ -1695,7 +1695,14 @@ function mostrarLogin(msg){
     btn.disabled = true; btn.textContent = 'Entrando...';
     const r = await sb.auth.signInWithPassword({ email, password: senha });
     btn.disabled = false; btn.textContent = 'Entrar';
-    if (r.error){ err.textContent = /invalid/i.test(r.error.message || '') ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar. Confira a internet.'; return; }
+    if (r.error){
+      const m = r.error.message || '';
+      err.textContent = /not confirmed/i.test(m) ? 'Este e-mail ainda não foi confirmado. Abra o e-mail de confirmação do Supabase (veja também o lixo eletrônico) e toque no link; depois entre de novo.'
+        : /invalid/i.test(m) ? 'E-mail ou senha incorretos.'
+        : /fetch|network|Failed/i.test(m) ? 'Sem conexão com o servidor. Confira a internet.'
+        : 'Não foi possível entrar: ' + m;
+      return;
+    }
     try { localStorage.setItem('bispo-email', email); } catch {}
     await definirUsuario(r.data.user); d.remove();
     await sincronizar(); if (estadoSync === 'ok') semente();
@@ -1738,7 +1745,7 @@ async function criarContaFamilia(c){
   try {
     // cliente separado e sem guardar sessão: assim você continua logado na sua conta
     const sb2 = window.supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'pg-cadastro' } });
-    const { data, error } = await sb2.auth.signUp({ email, password: senha, options: { data: { nome, criado_por: uid, app: 'pergaminho' } } });
+    const { data, error } = await sb2.auth.signUp({ email, password: senha, options: { data: { nome, criado_por: uid, app: 'pergaminho' }, emailRedirectTo: location.origin + location.pathname } });
     if (error){
       const m = error.message || '';
       dizer(/registered|exists/i.test(m) ? 'Esse e-mail já tem conta. Ela pode entrar com a senha que já usa.' : /not allowed|disabled/i.test(m) ? 'O cadastro de novas contas está desligado no Supabase (Authentication → Sign In / Providers → "Allow new users to sign up").' : 'Não consegui criar: ' + m, '#C0392B');
